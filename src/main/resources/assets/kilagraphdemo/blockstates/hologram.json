@@ -1,0 +1,10 @@
+{
+    "variants": {
+        "facing=up":    { "model": "kilagraphdemo:block/hologram" },
+        "facing=down":  { "model": "kilagraphdemo:block/hologram", "x": 180 },
+        "facing=north": { "model": "kilagraphdemo:block/hologram", "x": 90 },
+        "facing=south": { "model": "kilagraphdemo:block/hologram", "x": 90, "y": 180 },
+        "facing=west":  { "model": "kilagraphdemo:block/hologram", "x": 90, "y": 270 },
+        "facing=east":  { "model": "kilagraphdemo:block/hologram", "x": 90, "y": 90 }
+    }
+}
