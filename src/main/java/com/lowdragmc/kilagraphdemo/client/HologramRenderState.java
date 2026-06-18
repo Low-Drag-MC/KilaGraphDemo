@@ -1,5 +1,6 @@
 package com.lowdragmc.kilagraphdemo.client;
 
+import com.lowdragmc.kilagraphdemo.graph.HologramPlacement;
 import net.minecraft.client.renderer.blockentity.state.BlockEntityRenderState;
 import net.minecraft.core.Direction;
 import net.minecraft.core.GlobalPos;
@@ -15,6 +16,8 @@ public class HologramRenderState extends BlockEntityRenderState {
     /** Identifies this hologram for {@code HologramDisplays} override lookup; null if level unavailable. */
     @Nullable
     public GlobalPos posKey;
-    /** Slow spin (degrees) of the projected model, for a living hologram look. */
+    /** Spin (degrees) of the projected model this frame; derived from the placement's spin speed. */
     public float spinDegrees;
+    /** The per-block placement (transform + spin) resolved at extraction. */
+    public HologramPlacement placement = HologramPlacement.DEFAULT;
 }

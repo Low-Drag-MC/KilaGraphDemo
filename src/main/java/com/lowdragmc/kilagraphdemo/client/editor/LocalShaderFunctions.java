@@ -9,6 +9,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.level.storage.TagValueInput;
+import net.minecraft.world.level.storage.TagValueOutput;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.File;
@@ -43,6 +44,13 @@ public final class LocalShaderFunctions {
     /** Write a raw Shader-Function resource into the local folder (used when caching a downloaded work). */
     public void writeRaw(IResourcePath path, CompoundTag tag) {
         if (path != null && tag != null) provider.addResource(path, tag);
+    }
+
+    /** Serialize a live Shader-Function graph back to the raw tag shape {@link #deserialize} reads. */
+    public CompoundTag serialize(ShaderFunctionGraph graph) {
+        var output = TagValueOutput.createWithContext(ProblemReporter.Collector.DISCARDING, Platform.getFrozenRegistry());
+        graph.graphModel.serialize(output);
+        return output.buildResult();
     }
 
     @Nullable

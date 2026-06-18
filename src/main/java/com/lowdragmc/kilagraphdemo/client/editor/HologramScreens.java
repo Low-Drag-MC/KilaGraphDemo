@@ -30,10 +30,19 @@ public final class HologramScreens {
         setScreen(ui.getRoot());
     }
 
+    /** Open the server-works browser for the server hologram at {@code pos}. */
+    public static void openServerBrowse(Level level, BlockPos pos) {
+        var be = level.getBlockEntity(pos) instanceof com.lowdragmc.kilagraphdemo.block.ServerHologramBlockEntity h ? h : null;
+        var ui = new com.lowdragmc.kilagraphdemo.client.ui.ServerHologramBrowseUI(GlobalPos.of(level.dimension(), pos), be);
+        setScreen(ui.getRoot());
+    }
+
     /** Open the editor on {@code display}; {@code onSaved} receives the graph tag, model + deps on save. */
     public static void openEditor(HologramDisplay display, ModelSelection model,
                                   HologramEditorWindow.SaveCallback onSaved) {
-        setScreen(HologramEditorWindow.build(display, model, onSaved));
+        var handle = HologramEditorWindow.build(display, model, onSaved);
+        var modularUI = new ModularUI(UI.of(handle.root, StylesheetManager.ORE_MERGED));
+        Minecraft.getInstance().setScreen(new HologramEditorScreen(modularUI, handle));
     }
 
     private static void setScreen(com.lowdragmc.lowdraglib2.gui.ui.UIElement root) {

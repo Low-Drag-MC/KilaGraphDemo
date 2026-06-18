@@ -29,16 +29,34 @@ public final class WorkPackage {
     private final ModelSelection model;
     /** External Shader-Function dependencies: pathWithType -> serialized resource tag. */
     private final Map<String, CompoundTag> resources;
+    /** Bundled local texture files: rewritten location string ({@code kilagraphdemo:downloaded/uid/idx.png})
+     *  -> raw PNG bytes. Empty for a locally-authored package; populated only on upload (see TextureBundler). */
+    private final Map<String, byte[]> textures;
+    /** Bundled custom OBJ model: rewritten location string ({@code kilagraphdemo:downloaded/uid/model.obj})
+     *  -> raw OBJ bytes. Empty unless the work uses a custom model; populated only on upload (see ModelBundler). */
+    private final Map<String, byte[]> models;
 
     public WorkPackage(WorkMeta meta, CompoundTag graphTag, ModelSelection model) {
-        this(meta, graphTag, model, Map.of());
+        this(meta, graphTag, model, Map.of(), Map.of(), Map.of());
     }
 
     public WorkPackage(WorkMeta meta, CompoundTag graphTag, ModelSelection model, Map<String, CompoundTag> resources) {
+        this(meta, graphTag, model, resources, Map.of(), Map.of());
+    }
+
+    public WorkPackage(WorkMeta meta, CompoundTag graphTag, ModelSelection model,
+                       Map<String, CompoundTag> resources, Map<String, byte[]> textures) {
+        this(meta, graphTag, model, resources, textures, Map.of());
+    }
+
+    public WorkPackage(WorkMeta meta, CompoundTag graphTag, ModelSelection model,
+                       Map<String, CompoundTag> resources, Map<String, byte[]> textures, Map<String, byte[]> models) {
         this.meta = meta;
         this.graphTag = graphTag;
         this.model = model;
         this.resources = resources;
+        this.textures = textures;
+        this.models = models;
     }
 
     /** Build a package by serializing a live graph + its model selection (no extra dependencies). */
@@ -58,9 +76,22 @@ public final class WorkPackage {
         return resources;
     }
 
+    public Map<String, byte[]> textures() {
+        return textures;
+    }
+
+    public Map<String, byte[]> models() {
+        return models;
+    }
+
     /** Same payload, new metadata — used for rename, which keeps the uid + dependencies. */
     public WorkPackage withMeta(WorkMeta newMeta) {
-        return new WorkPackage(newMeta, graphTag, model, resources);
+        return new WorkPackage(newMeta, graphTag, model, resources, textures, models);
+    }
+
+    /** Same payload, new model selection + bundled model bytes — used by {@link com.lowdragmc.kilagraphdemo.client.editor.ModelBundler}. */
+    public WorkPackage withModel(ModelSelection newModel, Map<String, byte[]> newModels) {
+        return new WorkPackage(meta, graphTag, newModel, resources, textures, newModels);
     }
 
     /**
@@ -96,6 +127,12 @@ public final class WorkPackage {
         CompoundTag resTag = new CompoundTag();
         resources.forEach(resTag::put);
         payload.put("resources", resTag);
+        CompoundTag texTag = new CompoundTag();
+        textures.forEach(texTag::putByteArray);
+        payload.put("textures", texTag);
+        CompoundTag modelTag = new CompoundTag();
+        models.forEach(modelTag::putByteArray);
+        payload.put("models", modelTag);
         tag.put("payload", payload);
         return tag;
     }
@@ -110,6 +147,16 @@ public final class WorkPackage {
         for (String key : resTag.keySet()) {
             resources.put(key, resTag.getCompoundOrEmpty(key));
         }
-        return new WorkPackage(meta, graphTag, model, resources);
+        Map<String, byte[]> textures = new HashMap<>();
+        CompoundTag texTag = payload.getCompoundOrEmpty("textures");
+        for (String key : texTag.keySet()) {
+            texTag.getByteArray(key).ifPresent(bytes -> textures.put(key, bytes));
+        }
+        Map<String, byte[]> models = new HashMap<>();
+        CompoundTag modelTag = payload.getCompoundOrEmpty("models");
+        for (String key : modelTag.keySet()) {
+            modelTag.getByteArray(key).ifPresent(bytes -> models.put(key, bytes));
+        }
+        return new WorkPackage(meta, graphTag, model, resources, textures, models);
     }
 }

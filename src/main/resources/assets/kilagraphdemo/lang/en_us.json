@@ -1,4 +1,12 @@
 {
   "itemGroup.kilagraphdemo": "KilaGraph Mod Tab",
-  "block.kilagraphdemo.hologram": "Hologram"
+  "block.kilagraphdemo.hologram": "Hologram",
+  "block.kilagraphdemo.server_hologram": "Server Hologram",
+
+  "rt_file_texture": "File Texture",
+  "kg.filetexture.file": "File",
+  "kg.filetexture.filter": "Filter",
+  "kg.filetexture.address": "Address",
+  "kg.filetexture.mipmap": "Mipmap",
+  "kg.filetexture.preview": "Preview"
 }

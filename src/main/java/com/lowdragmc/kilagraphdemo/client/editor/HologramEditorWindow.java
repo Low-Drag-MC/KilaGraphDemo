@@ -17,6 +17,10 @@ import java.util.Map;
  * {@link RenderTypeGraphEditorView} (left) editing the work's graph, a self-built
  * {@link ShaderFunctionResourceView} (top-right) for accessing / using Shader-Function subgraphs, and a
  * {@link ModelSettingsView} (bottom-right) for the display model. No LDLib2 {@code Editor}.
+ *
+ * <p>{@link #build} returns a {@link Handle} so the hosting screen can query combined dirtiness (graph
+ * <i>and</i> model) and trigger a save — the model is part of the work, so its edits must persist and prompt
+ * on close just like graph edits.</p>
  */
 public final class HologramEditorWindow {
 
@@ -28,8 +32,48 @@ public final class HologramEditorWindow {
     private HologramEditorWindow() {
     }
 
-    public static UIElement build(HologramDisplay display, ModelSelection initialModel, SaveCallback onSaved) {
+    /**
+     * Handle to a built editor: its root element plus combined-dirty/save control. Dirtiness compares the live
+     * graph + model against the last-saved snapshot; {@link #save()} routes through the graph editor's root
+     * save (which persists graph + model together via {@code onSaved}).
+     */
+    public static final class Handle {
+        public final UIElement root;
+        private final RenderTypeGraphEditorView editorView;
+        private final ModelSelection[] model; // [0] = current model (updated live by ModelSettingsView)
+        private CompoundTag savedGraphTag;
+        private ModelSelection savedModel;
+
+        private Handle(UIElement root, RenderTypeGraphEditorView editorView, ModelSelection[] model,
+                       CompoundTag savedGraphTag, ModelSelection savedModel) {
+            this.root = root;
+            this.editorView = editorView;
+            this.model = model;
+            this.savedGraphTag = savedGraphTag;
+            this.savedModel = savedModel;
+        }
+
+        /** True if the graph or the model differs from the last-saved state. */
+        public boolean isDirty() {
+            return !editorView.serializeGraph().equals(savedGraphTag) || !model[0].equals(savedModel);
+        }
+
+        /** Persist graph + model (at the root level), updating the saved snapshot. */
+        public void save() {
+            editorView.popToLevel(0);   // never save while dived into a subgraph
+            editorView.notifySaved();   // → onSaved callback persists + records the snapshot
+        }
+
+        /** Called from the {@code onSaved} callback so a save via either the graph's Save button or {@link #save()} updates the snapshot. */
+        private void recordSaved(CompoundTag graphTag) {
+            this.savedGraphTag = graphTag;
+            this.savedModel = model[0];
+        }
+    }
+
+    public static Handle build(HologramDisplay display, ModelSelection initialModel, SaveCallback onSaved) {
         ModelSelection[] model = {initialModel};
+        Handle[] handleRef = new Handle[1];
         LocalShaderFunctions store = new LocalShaderFunctions();
 
         SplittableWindow root = new SplittableWindow();
@@ -37,7 +81,7 @@ public final class HologramEditorWindow {
                 .splitNew(SplittableWindow.Edge.RIGHT);
         SplittableWindow leftWin = split.getFirst();
         SplittableWindow rightWin = split.getSecond();
-        var rightSplit = rightWin.splitStyle(s -> s.percentage(50).minPercentage(15).maxPercentage(85))
+        var rightSplit = rightWin.splitStyle(s -> s.percentage(30).minPercentage(15).maxPercentage(85))
                 .splitNew(SplittableWindow.Edge.BOTTOM);
         SplittableWindow resourceWin = rightSplit.getFirst();
         // Bottom-right splits again into model settings (top) and the live world view (bottom).
@@ -55,15 +99,25 @@ public final class HologramEditorWindow {
         graph.graphModel.setReferenceResolver(store::resolve);
 
         RenderTypeGraphEditorView editorView = new RenderTypeGraphEditorView(RenderTypeGraphView::new);
-        editorView.loadGraph(graph, tag ->
-                onSaved.onSave(tag, model[0], DependencyPacker.collect(graph, store)));
+        editorView.loadGraph(graph, tag -> {
+            onSaved.onSave(tag, model[0], DependencyPacker.collect(graph, store));
+            if (handleRef[0] != null) handleRef[0].recordSaved(tag);
+        });
 
-        ModelSettingsView modelView = new ModelSettingsView(display, initialModel, m -> model[0] = m);
+        // Model edits update the live display + current model, and mark the editor dirty so the work's Save
+        // (and the close prompt) covers model changes — not only graph changes.
+        ModelSettingsView modelView = new ModelSettingsView(display, initialModel, m -> {
+            model[0] = m;
+            editorView.markAsDirty();
+        });
 
         leftWin.getLeftTop().addView(editorView);
         resourceWin.getLeftTop().addView(resourceView);
         modelWin.getLeftTop().addView(modelView);
         worldWin.getLeftTop().addView(new WorldViewPanel());
-        return root;
+
+        Handle handle = new Handle(root, editorView, model, editorView.serializeGraph(), initialModel);
+        handleRef[0] = handle;
+        return handle;
     }
 }

@@ -1,11 +1,18 @@
 package com.lowdragmc.kilagraphdemo.client.ui;
 
 import com.lowdragmc.kilagraph.rendertype.RenderTypeGraph;
+import com.lowdragmc.kilagraphdemo.Kilagraphdemo;
 import com.lowdragmc.kilagraphdemo.block.HologramBlockEntity;
 import com.lowdragmc.kilagraphdemo.client.ClientWorks;
 import com.lowdragmc.kilagraphdemo.client.editor.HologramScreens;
+import com.lowdragmc.kilagraphdemo.client.editor.LocalShaderFunctions;
+import com.lowdragmc.kilagraphdemo.client.editor.ModelBundler;
+import com.lowdragmc.kilagraphdemo.client.editor.PlacementDialog;
+import com.lowdragmc.kilagraphdemo.client.editor.TextureBundler;
+import com.lowdragmc.lowdraglib2.gui.ui.elements.Dialog;
 import com.lowdragmc.kilagraphdemo.client.render.HologramDisplay;
 import com.lowdragmc.kilagraphdemo.client.render.HologramDisplays;
+import com.lowdragmc.kilagraphdemo.client.render.HologramPlacements;
 import com.lowdragmc.kilagraphdemo.graph.LocalGraphStore;
 import com.lowdragmc.kilagraphdemo.graph.ModelSelection;
 import com.lowdragmc.kilagraphdemo.graph.ServerWorkEntry;
@@ -82,6 +89,9 @@ public class HologramBrowseUI implements ClientWorks.Listener {
     private HologramDisplay workingDisplay;
     private ModelSelection model = ModelSelection.DEFAULT;
     private SortMode sortMode = SortMode.LIKES_THEN_NEW;
+    private boolean mineOnly = false;
+    @Nullable
+    private Button mineButton;
 
     /** Server-list ordering. Default blends likes then recency; the toggles pick a single criterion. */
     private enum SortMode {
@@ -160,7 +170,24 @@ public class HologramBrowseUI implements ClientWorks.Listener {
         row.addChild(sortButton("Liked", SortMode.MOST_LIKED));
         row.addChild(sortButton("New", SortMode.NEWEST));
         row.addChild(sortButton("Old", SortMode.OLDEST));
+        row.addChild(mineFilterButton());
         return row;
+    }
+
+    /** Toggle button limiting the server list to works uploaded by this client. */
+    private Button mineFilterButton() {
+        mineButton = new Button().setText(mineLabel());
+        mineButton.getLayout().flex(1).heightPercent(100);
+        mineButton.setOnClick(e -> {
+            mineOnly = !mineOnly;
+            mineButton.setText(mineLabel());
+            refreshServerList();
+        });
+        return mineButton;
+    }
+
+    private String mineLabel() {
+        return mineOnly ? "Mine ✓" : "Mine";
     }
 
     private Button sortButton(String label, SortMode mode) {
@@ -194,6 +221,7 @@ public class HologramBrowseUI implements ClientWorks.Listener {
         serverListContainer.clearAllChildren();
         serverRows.clear();
         List<ServerWorkEntry> entries = new ArrayList<>(ClientWorks.serverWorks());
+        if (mineOnly) entries.removeIf(e -> !isMine(e));
         entries.sort(sortMode.comparator);
         int index = 1;
         for (ServerWorkEntry entry : entries) {
@@ -297,7 +325,8 @@ public class HologramBrowseUI implements ClientWorks.Listener {
             selectedServer = null;
             model = pkg.model();
             HologramDisplay live = isCurrentlyDisplayed(meta.uid()) ? HologramDisplays.resolve(blockPos) : null;
-            workingDisplay = live != null ? live : new HologramDisplay(pkg.loadGraph(), model.toContent());
+            workingDisplay = live != null ? live
+                    : new HologramDisplay(pkg.loadGraph(), model.toContent(), model.renderRadius());
             highlight();
             refreshDetail();
         });
@@ -393,9 +422,19 @@ public class HologramBrowseUI implements ClientWorks.Listener {
                 && entry.meta().authorUuid().equals(Minecraft.getInstance().player.getUUID().toString());
     }
 
+    /** Whether a work with this uid is currently published on the server. */
+    private boolean serverHasUid(String uid) {
+        return ClientWorks.serverWorks().stream().anyMatch(e -> e.meta().uid().equals(uid));
+    }
+
+    /** How many of the server's works belong to this client (for the upload-quota pre-check). */
+    private int myServerWorkCount() {
+        return (int) ClientWorks.serverWorks().stream().filter(this::isMine).count();
+    }
+
     private void buildLocalDetail(WorkMeta m) {
         metaLabels.addChild(metaLabel(m.title(), ColorPattern.YELLOW.color));
-        metaLabels.addChild(metaLabel("model: " + model.key() + " x" + model.subdivisions(), ColorPattern.CYAN.color));
+        metaLabels.addChild(metaLabel("model: " + model.describe(), ColorPattern.CYAN.color));
         metaLabels.addChild(metaLabel("(double-click a row to rename)", ColorPattern.GRAY.color));
 
         // Editable multi-line description (used on upload) in the body.
@@ -405,6 +444,7 @@ public class HologramBrowseUI implements ClientWorks.Listener {
 
         actions.addChild(new Button().setText("Edit").setOnClick(e -> onEdit()));
         actions.addChild(new Button().setText("Display").setOnClick(e -> onDisplay()));
+        actions.addChild(new Button().setText("Placement…").setOnClick(e -> onPlacement()));
         actions.addChild(new Button().setText("Upload").setOnClick(e -> onUpload()));
         actions.addChild(new Button().setText("Delete (local)").setOnClick(e -> onDeleteLocal(m.uid())));
     }
@@ -441,6 +481,12 @@ public class HologramBrowseUI implements ClientWorks.Listener {
         applyToBlock();
     }
 
+    /** Edit the regular hologram's runtime placement (transform + spin) live — not persisted. */
+    private void onPlacement() {
+        PlacementDialog.open(root, HologramPlacements.resolve(blockPos),
+                placement -> HologramPlacements.set(blockPos, placement), null);
+    }
+
     private void applyToBlock() {
         if (workingDisplay == null || selectedLocal == null) return;
         HologramDisplays.setOverride(blockPos, workingDisplay);
@@ -450,9 +496,22 @@ public class HologramBrowseUI implements ClientWorks.Listener {
 
     private void onUpload() {
         if (selectedLocal == null) return;
+        if (Minecraft.getInstance().player == null) return;
+        String myUuid = Minecraft.getInstance().player.getUUID().toString();
+
+        // Quota pre-check (the server enforces it too): publishing creates a NEW server work unless this is an
+        // update to my already-published work. Updating is always allowed; a new work needs count < limit.
+        boolean mineWork = selectedLocal.authorUuid().isEmpty() || selectedLocal.authorUuid().equals(myUuid);
+        boolean willCreateNew = !(mineWork && serverHasUid(selectedLocal.uid()));
+        if (willCreateNew && !Kilagraphdemo.canBypassUploadLimit(Minecraft.getInstance().player)
+                && myServerWorkCount() >= Kilagraphdemo.MAX_WORKS_PER_PLAYER) {
+            Dialog.showNotification("Upload limit reached",
+                    "You can publish at most " + Kilagraphdemo.MAX_WORKS_PER_PLAYER
+                            + " works. Delete one of yours first.", null).show(root);
+            return;
+        }
+
         String desc = String.join("\n", descriptionField.getValue());
-        String myUuid = Minecraft.getInstance().player == null ? ""
-                : Minecraft.getInstance().player.getUUID().toString();
         LocalGraphStore.load(selectedLocal.uid()).ifPresent(pkg -> {
             String author = pkg.meta().authorUuid();
             boolean mine = author.isEmpty() || author.equals(myUuid);
@@ -468,7 +527,33 @@ public class HologramBrowseUI implements ClientWorks.Listener {
             LocalGraphStore.save(toUpload);
             refreshLocalList();
             onSelectLocal(toUpload.meta());
-            ClientWorks.upload(toUpload);
+            // Bundle any local PNG textures (rewriting their locations under this upload's uid) so the
+            // shared work is self-contained. The locally-saved copy keeps its original textures/ locations.
+            TextureBundler.Result result = TextureBundler.rewriteForUpload(
+                    toUpload, toUpload.meta().uid(), new LocalShaderFunctions());
+            if (result.tooLarge()) {
+                Dialog.showNotification("Upload too large",
+                        "Bundled textures are " + (result.totalBytes() / (1024 * 1024) + 1)
+                                + " MB (max " + (TextureBundler.MAX_TOTAL_BYTES / (1024 * 1024)) + " MB).",
+                        null).show(root);
+                return;
+            }
+            WorkPackage uploadPkg = result.pkg() != null ? result.pkg() : toUpload;
+            // Then bundle a custom OBJ model (if any), rewriting its location under this upload's uid.
+            ModelBundler.Result modelResult = ModelBundler.rewriteForUpload(uploadPkg, toUpload.meta().uid());
+            if (modelResult.tooLarge()) {
+                Dialog.showNotification("Upload too large",
+                        "Bundled model is " + (modelResult.totalBytes() / (1024 * 1024) + 1)
+                                + " MB (max " + (ModelBundler.MAX_MODEL_BYTES / (1024 * 1024)) + " MB).",
+                        null).show(root);
+                return;
+            }
+            if (modelResult.pkg() != null) uploadPkg = modelResult.pkg();
+            Dialog.showNotification("Uploaded",
+                    "Bundled " + uploadPkg.textures().size() + " texture(s), "
+                            + uploadPkg.models().size() + " model(s), "
+                            + ((result.totalBytes() + modelResult.totalBytes()) / 1024) + " KB.", null).show(root);
+            ClientWorks.upload(uploadPkg);
         });
     }
 

@@ -3,6 +3,8 @@ package com.lowdragmc.kilagraphdemo.client;
 import com.lowdragmc.kilagraphdemo.Kilagraphdemo;
 import com.lowdragmc.kilagraphdemo.ModRegistries;
 import com.lowdragmc.kilagraphdemo.client.render.HologramDisplays;
+import com.lowdragmc.kilagraphdemo.client.render.HologramPlacements;
+import com.lowdragmc.kilagraphdemo.client.render.ServerHologramDisplays;
 import com.lowdragmc.kilagraphdemo.client.render.WorldCapture;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -24,12 +26,18 @@ public final class KilagraphdemoClient {
     @SubscribeEvent
     public static void onRegisterRenderers(EntityRenderersEvent.RegisterRenderers event) {
         event.registerBlockEntityRenderer(ModRegistries.HOLOGRAM_BE.get(), HologramRenderer::new);
+        event.registerBlockEntityRenderer(ModRegistries.SERVER_HOLOGRAM_BE.get(), ServerHologramRenderer::new);
     }
 
     @SubscribeEvent
     public static void onLoggingOut(ClientPlayerNetworkEvent.LoggingOut event) {
         // Runtime display overrides are ephemeral — discard them so holograms revert to the default.
         HologramDisplays.clearAll();
+        HologramPlacements.clearAll();
+        ServerHologramDisplays.clearAll();
+        // Free the world-view capture texture if the editor was open at disconnect (no more capture frames
+        // to flush its deferred close).
+        WorldCapture.INSTANCE.destroy();
     }
 
     @SubscribeEvent

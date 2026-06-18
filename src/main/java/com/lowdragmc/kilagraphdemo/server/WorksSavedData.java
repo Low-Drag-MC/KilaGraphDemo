@@ -49,15 +49,15 @@ public class WorksSavedData extends SavedData {
             DataFixTypes.LEVEL);
 
     /** Outcome of an upload attempt. */
-    public enum UploadStatus { PUBLISHED, UPDATED, REJECTED_HAS_OTHER }
+    public enum UploadStatus { PUBLISHED, UPDATED, REJECTED_LIMIT }
 
     public record UploadResult(UploadStatus status, @Nullable WorkMeta meta) {}
 
     private final Path dir;
     private final Map<String, WorkMeta> metas = new HashMap<>();
     private final Map<String, Set<UUID>> likes = new HashMap<>();
-    /** authorUuid -> their single published uid; rebuilt from {@link #metas} (1 work per author). */
-    private final Map<UUID, String> authorIndex = new HashMap<>();
+    /** authorUuid -> their published uids; rebuilt from {@link #metas}. Capped by {@link Kilagraphdemo#MAX_WORKS_PER_PLAYER}. */
+    private final Map<UUID, Set<String>> authorIndex = new HashMap<>();
 
     private WorksSavedData(ServerLevel level) {
         this.dir = level.getServer().getWorldPath(LevelResource.ROOT)
@@ -87,6 +87,16 @@ public class WorksSavedData extends SavedData {
         return out;
     }
 
+    /** Whether a work with this uid is published (used to validate a server-hologram display selection). */
+    public boolean exists(String uid) {
+        return metas.containsKey(uid);
+    }
+
+    /** How many works {@code author} currently has published. */
+    private int countFor(UUID author) {
+        return authorIndex.getOrDefault(author, Set.of()).size();
+    }
+
     @Nullable
     public CompoundTag getPayload(String uid) {
         Path file = payloadFile(uid);
@@ -101,36 +111,39 @@ public class WorksSavedData extends SavedData {
 
     // ---- mutations ---------------------------------------------------------------------------
 
-    /** Publish or update the author's work. A 2nd distinct work is rejected (one work per author). */
+    /**
+     * Publish or update a work. Updating one of the author's own existing works is always allowed; publishing
+     * a <em>new</em> work is rejected once the author already has {@link Kilagraphdemo#MAX_WORKS_PER_PLAYER}
+     * works, unless they {@link Kilagraphdemo#canBypassUploadLimit can bypass} (Creative/Op).
+     */
     public UploadResult upsert(ServerPlayer player, CompoundTag packageTag) {
         WorkMeta incoming = WorkMeta.fromTag(packageTag.getCompoundOrEmpty("meta"));
         String uid = incoming.uid();
         UUID author = player.getUUID();
-        String existingUid = authorIndex.get(author);
+        String authorStr = author.toString();
         long now = System.currentTimeMillis();
 
-        if (existingUid != null && !existingUid.equals(uid)) {
-            return new UploadResult(UploadStatus.REJECTED_HAS_OTHER, null);
-        }
+        WorkMeta existing = metas.get(uid);
+        boolean ownedUpdate = existing != null && existing.authorUuid().equals(authorStr);
 
         WorkMeta authoritative;
         UploadStatus status;
-        if (existingUid != null) {
-            WorkMeta old = metas.get(uid);
-            int version = (old == null ? 0 : old.version()) + 1;
-            long first = old == null ? now : old.firstUploadTime();
-            authoritative = new WorkMeta(uid, version, author.toString(), player.getName().getString(),
-                    incoming.title(), incoming.description(), first, now);
+        if (ownedUpdate) {
+            authoritative = new WorkMeta(uid, existing.version() + 1, authorStr, player.getName().getString(),
+                    incoming.title(), incoming.description(), existing.firstUploadTime(), now);
             status = UploadStatus.UPDATED;
         } else {
+            if (!Kilagraphdemo.canBypassUploadLimit(player) && countFor(author) >= Kilagraphdemo.MAX_WORKS_PER_PLAYER) {
+                return new UploadResult(UploadStatus.REJECTED_LIMIT, null);
+            }
             // Defensive: never overwrite a work already owned by someone else (e.g. an uploaded fork
             // that kept the original uid). Mint a fresh uid so the original author's work is untouched.
             if (metas.containsKey(uid)) {
                 uid = UUID.randomUUID().toString();
             }
-            authoritative = new WorkMeta(uid, 1, author.toString(), player.getName().getString(),
+            authoritative = new WorkMeta(uid, 1, authorStr, player.getName().getString(),
                     incoming.title(), incoming.description(), now, now);
-            authorIndex.put(author, uid);
+            authorIndex.computeIfAbsent(author, k -> new HashSet<>()).add(uid);
             likes.computeIfAbsent(uid, k -> new HashSet<>());
             status = UploadStatus.PUBLISHED;
         }
@@ -150,7 +163,11 @@ public class WorksSavedData extends SavedData {
         if (meta == null || !meta.authorUuid().equals(player.getUUID().toString())) return false;
         metas.remove(uid);
         likes.remove(uid);
-        authorIndex.remove(player.getUUID());
+        Set<String> owned = authorIndex.get(player.getUUID());
+        if (owned != null) {
+            owned.remove(uid);
+            if (owned.isEmpty()) authorIndex.remove(player.getUUID());
+        }
         try {
             Files.deleteIfExists(payloadFile(uid));
         } catch (IOException e) {
@@ -196,7 +213,8 @@ public class WorksSavedData extends SavedData {
                     WorkMeta meta = WorkMeta.fromTag(mt);
                     metas.put(meta.uid(), meta);
                     try {
-                        authorIndex.put(UUID.fromString(meta.authorUuid()), meta.uid());
+                        authorIndex.computeIfAbsent(UUID.fromString(meta.authorUuid()), k -> new HashSet<>())
+                                .add(meta.uid());
                     } catch (IllegalArgumentException ignored) {
                     }
                 }

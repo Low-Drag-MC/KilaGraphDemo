@@ -1,11 +1,13 @@
 package com.lowdragmc.kilagraphdemo.graph;
 
+import com.lowdragmc.kilagraphdemo.Kilagraphdemo;
 import com.mojang.logging.LogUtils;
 import net.minecraft.client.Minecraft;
 import net.minecraft.nbt.NbtAccounter;
 import net.minecraft.nbt.NbtIo;
 import org.slf4j.Logger;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -64,6 +66,20 @@ public final class LocalGraphStore {
             Files.deleteIfExists(file(uid));
         } catch (IOException e) {
             LOGGER.error("[KilaGraphDemo] failed to delete work {}", uid, e);
+        }
+        // Also remove this work's bundled textures (downloaded works keep them under downloaded/<uid>/),
+        // so deleting a work reclaims its texture files too. No-op for a self-authored work (no such folder).
+        deleteRecursively(new File(Kilagraphdemo.getAssetsDir(), "downloaded/" + uid));
+    }
+
+    private static void deleteRecursively(File path) {
+        if (!path.exists()) return;
+        File[] children = path.listFiles();
+        if (children != null) {
+            for (File child : children) deleteRecursively(child);
+        }
+        if (!path.delete()) {
+            LOGGER.warn("[KilaGraphDemo] failed to delete {}", path);
         }
     }
 

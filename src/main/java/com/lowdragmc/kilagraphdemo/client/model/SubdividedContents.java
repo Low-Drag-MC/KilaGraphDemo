@@ -113,10 +113,14 @@ public final class SubdividedContents {
         return bottom + (top - bottom) * t;
     }
 
-    /** UV sphere (radius 0.5) with {@code sub} latitude rings and {@code 2*sub} longitude segments. */
+    /**
+     * UV sphere (radius 0.5). Tessellation scales with {@code sub} as a quality knob: {@code 4*sub} latitude
+     * rings and {@code 8*sub} longitude segments (so the default {@code sub=4} is a smooth 16×32 sphere, not a
+     * coarse polyhedron). The minimums keep even {@code sub=1} recognizably round-ish.
+     */
     private static void sphere(PreviewMeshBuilder mb, int sub) {
-        int rings = Math.max(2, sub);
-        int segments = Math.max(3, sub * 2);
+        int rings = Math.max(4, sub * 4);
+        int segments = Math.max(8, sub * 8);
         float r = 0.5f;
         PreviewVertex[][] grid = new PreviewVertex[rings + 1][segments + 1];
         for (int i = 0; i <= rings; i++) {

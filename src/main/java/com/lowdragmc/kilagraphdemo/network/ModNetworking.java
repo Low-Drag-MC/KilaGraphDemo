@@ -23,6 +23,9 @@ public final class ModNetworking {
         registrar.playToServer(C2SDownload.TYPE, C2SDownload.CODEC, C2SDownload::execute);
         registrar.playToServer(C2SDelete.TYPE, C2SDelete.CODEC, C2SDelete::execute);
         registrar.playToServer(C2SLike.TYPE, C2SLike.CODEC, C2SLike::execute);
+        registrar.playToServer(C2SSetServerHologram.TYPE, C2SSetServerHologram.CODEC, C2SSetServerHologram::execute);
+        registrar.playToServer(C2SSetServerHologramPlacement.TYPE, C2SSetServerHologramPlacement.CODEC,
+                C2SSetServerHologramPlacement::execute);
         registrar.playToClient(S2CWorkList.TYPE, S2CWorkList.CODEC, S2CWorkList::execute);
         registrar.playToClient(S2CWorkDataChunk.TYPE, S2CWorkDataChunk.CODEC, S2CWorkDataChunk::execute);
     }

@@ -1,5 +1,6 @@
 package com.lowdragmc.kilagraphdemo.server;
 
+import com.lowdragmc.kilagraphdemo.Kilagraphdemo;
 import com.lowdragmc.kilagraphdemo.network.Chunks;
 import com.lowdragmc.kilagraphdemo.network.ModNetworking;
 import com.mojang.logging.LogUtils;
@@ -50,8 +51,9 @@ public final class UploadAssembler {
         switch (result.status()) {
             case PUBLISHED -> player.sendSystemMessage(Component.literal("Work published."));
             case UPDATED -> player.sendSystemMessage(Component.literal("Work updated."));
-            case REJECTED_HAS_OTHER ->
-                    player.sendSystemMessage(Component.literal("You already published a different work — delete it first."));
+            case REJECTED_LIMIT -> player.sendSystemMessage(Component.literal(
+                    "Upload limit reached (" + Kilagraphdemo.MAX_WORKS_PER_PLAYER
+                            + "). Delete one of your works first."));
         }
         ModNetworking.sendList(player);
     }

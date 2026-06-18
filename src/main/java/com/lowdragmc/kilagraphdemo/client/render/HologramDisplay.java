@@ -23,6 +23,8 @@ public class HologramDisplay {
 
     private final RenderTypeGraph graph;
     private KGPreviewContent content;
+    /** The work's cull radius (block units) — drives the renderer's expanded render bounding box. */
+    private final float renderRadius;
 
     @Nullable
     private RenderTypeGraphMaterial material;
@@ -30,12 +32,21 @@ public class HologramDisplay {
     private boolean lastBuildFailed = false;
 
     public HologramDisplay(RenderTypeGraph graph, @Nullable KGPreviewContent content) {
+        this(graph, content, com.lowdragmc.kilagraphdemo.graph.ModelSelection.DEFAULT_RADIUS);
+    }
+
+    public HologramDisplay(RenderTypeGraph graph, @Nullable KGPreviewContent content, float renderRadius) {
         this.graph = graph;
         this.content = content != null ? content : KGPreviewContents.CUBE;
+        this.renderRadius = renderRadius;
     }
 
     public RenderTypeGraph graph() {
         return graph;
+    }
+
+    public float renderRadius() {
+        return renderRadius;
     }
 
     public KGPreviewContent content() {

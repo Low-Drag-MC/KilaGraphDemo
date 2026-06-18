@@ -1,5 +1,6 @@
 package com.lowdragmc.kilagraphdemo.client;
 
+import com.lowdragmc.kilagraphdemo.Kilagraphdemo;
 import com.lowdragmc.kilagraphdemo.client.editor.LocalShaderFunctions;
 import com.lowdragmc.kilagraphdemo.graph.LocalGraphStore;
 import com.lowdragmc.kilagraphdemo.graph.ServerWorkEntry;
@@ -14,11 +15,14 @@ import com.lowdragmc.kilagraphdemo.network.Chunks;
 import com.mojang.logging.LogUtils;
 import net.minecraft.client.Minecraft;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.resources.Identifier;
 import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 
+import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -124,6 +128,8 @@ public final class ClientWorks {
                 try {
                     WorkPackage pkg = WorkPackage.fromTag(Chunks.toTag(bytes));
                     cacheDependencies(pkg);
+                    cacheTextures(pkg);
+                    cacheModels(pkg);
                     LocalGraphStore.save(pkg);
                 } catch (IOException e) {
                     LOGGER.error("[KilaGraphDemo] failed to parse downloaded work {}", uid, e);
@@ -136,6 +142,42 @@ public final class ClientWorks {
 
     private static void notifyUpdated(@Nullable String downloadedUid) {
         if (listener != null) listener.onWorksUpdated(downloadedUid);
+    }
+
+    /** Write a downloaded work's bundled PNG textures into the assets dir under their (rewritten)
+     *  {@code kilagraphdemo:downloaded/<uid>/…} locations, so the graph binds them at render time. */
+    private static void cacheTextures(WorkPackage pkg) {
+        if (pkg.textures().isEmpty()) return;
+        File assets = Kilagraphdemo.getAssetsDir();
+        pkg.textures().forEach((location, bytes) -> {
+            Identifier id = Identifier.tryParse(location);
+            if (id == null) return;
+            File file = new File(assets, id.getPath());
+            try {
+                Files.createDirectories(file.toPath().getParent());
+                Files.write(file.toPath(), bytes);
+            } catch (IOException e) {
+                LOGGER.error("[KilaGraphDemo] failed to write texture {}", location, e);
+            }
+        });
+    }
+
+    /** Write a downloaded work's bundled custom OBJ model into the assets dir under its (rewritten)
+     *  {@code kilagraphdemo:downloaded/<uid>/model.obj} location, so {@code ObjContents} can load it. */
+    private static void cacheModels(WorkPackage pkg) {
+        if (pkg.models().isEmpty()) return;
+        File assets = Kilagraphdemo.getAssetsDir();
+        pkg.models().forEach((location, bytes) -> {
+            Identifier id = Identifier.tryParse(location);
+            if (id == null) return;
+            File file = new File(assets, id.getPath());
+            try {
+                Files.createDirectories(file.toPath().getParent());
+                Files.write(file.toPath(), bytes);
+            } catch (IOException e) {
+                LOGGER.error("[KilaGraphDemo] failed to write model {}", location, e);
+            }
+        });
     }
 
     /** Write a downloaded work's bundled Shader-Function dependencies into the local folder (so they're

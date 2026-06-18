@@ -11,12 +11,21 @@ import com.mojang.blaze3d.textures.TextureFormat;
 import net.minecraft.client.Minecraft;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * Captures the main render target's colour into an owned texture so it can be shown as a live "world
  * view" in a UI panel. Modelled on KilaGraph's {@code SceneCaptureManager}: {@link #capture()} copies
  * the main framebuffer (called at {@code RenderLevelStageEvent.AfterLevel} — world done, hand/GUI not
  * yet); ref-counted {@link #acquire()}/{@link #release()} mean the texture only exists (and capture only
  * runs) while a panel is open. All methods run on the render thread.
+ *
+ * <p><b>Deferred destruction:</b> the captured view is submitted into the GUI as a <i>deferred</i> blit
+ * (a {@code FloatBlitRenderState} that {@code GuiRenderer} executes at the end of the frame), so closing it
+ * synchronously on resize/release would draw a closed view → crash. Instead, old textures are <i>retired</i>
+ * ({@link #scheduleClose}) and closed one frame later at the top of the next {@link #capture()} — by which
+ * point the previous frame's GUI batch has already executed.</p>
  */
 public final class WorldCapture {
 
@@ -31,6 +40,8 @@ public final class WorldCapture {
     @Nullable private GpuTexture colorTexture;
     @Nullable private GpuTextureView colorView;
     @Nullable private GpuSampler sampler;
+    /** GPU resources retired this frame, closed at the start of the next {@link #capture()} (see class doc). */
+    private final List<AutoCloseable> pendingClose = new ArrayList<>();
 
     private WorldCapture() {
     }
@@ -41,11 +52,20 @@ public final class WorldCapture {
 
     public void release() {
         if (users > 0) users--;
-        if (users == 0) destroy();
+        if (users == 0) {
+            // Retire (don't close) — a deferred GUI blit submitted this frame may still reference the view.
+            scheduleClose(colorView, colorTexture);
+            colorView = null;
+            colorTexture = null;
+            width = height = 0;
+            format = null;
+        }
     }
 
     /** Copy the main framebuffer colour into our owned texture. No-op when no panel needs it. */
     public void capture() {
+        // Close resources retired last frame; their GUI draws have finished flushing by now.
+        flushPending();
         if (users <= 0) return;
         Minecraft mc = Minecraft.getInstance();
         if (mc == null) return;
@@ -86,7 +106,8 @@ public final class WorldCapture {
 
     private void ensure(int w, int h, TextureFormat f) {
         if (colorTexture != null && w == width && h == height && f == format) return;
-        destroyTextures();
+        // Retire the old texture (a deferred blit may still reference it) rather than closing it now.
+        scheduleClose(colorView, colorTexture);
         var device = RenderSystem.getDevice();
         width = w;
         height = h;
@@ -95,14 +116,31 @@ public final class WorldCapture {
         colorView = device.createTextureView(colorTexture);
     }
 
+    /** Hard teardown at a known-safe boundary (e.g. disconnect): flush retired resources + close current. */
     public void destroy() {
-        destroyTextures();
-    }
-
-    private void destroyTextures() {
+        flushPending();
         if (colorView != null) { colorView.close(); colorView = null; }
         if (colorTexture != null) { colorTexture.close(); colorTexture = null; }
         width = height = 0;
         format = null;
+    }
+
+    /** Retire GPU resources for closing one frame later (close order: view before its texture). */
+    private void scheduleClose(@Nullable AutoCloseable... resources) {
+        for (AutoCloseable resource : resources) {
+            if (resource != null) pendingClose.add(resource);
+        }
+    }
+
+    private void flushPending() {
+        if (pendingClose.isEmpty()) return;
+        for (AutoCloseable resource : pendingClose) {
+            try {
+                resource.close();
+            } catch (Exception ignored) {
+                // best-effort GPU resource cleanup
+            }
+        }
+        pendingClose.clear();
     }
 }

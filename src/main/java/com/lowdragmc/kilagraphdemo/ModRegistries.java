@@ -2,6 +2,8 @@ package com.lowdragmc.kilagraphdemo;
 
 import com.lowdragmc.kilagraphdemo.block.HologramBlock;
 import com.lowdragmc.kilagraphdemo.block.HologramBlockEntity;
+import com.lowdragmc.kilagraphdemo.block.ServerHologramBlock;
+import com.lowdragmc.kilagraphdemo.block.ServerHologramBlockEntity;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.CreativeModeTab;
@@ -36,12 +38,29 @@ public final class ModRegistries {
             BLOCK_ENTITIES.register("hologram",
                     () -> new BlockEntityType<>(HologramBlockEntity::new, HOLOGRAM_BLOCK.get()));
 
+    // Server hologram: like the hologram, but its displayed work is stored/synced by the server and
+    // lazily pulled per client. Reuses the same model/textures for now.
+    public static final DeferredBlock<ServerHologramBlock> SERVER_HOLOGRAM_BLOCK = BLOCKS.registerBlock(
+            "server_hologram",
+            ServerHologramBlock::new,
+            p -> p.noOcclusion().strength(2f).lightLevel(state -> 7));
+
+    public static final DeferredItem<?> SERVER_HOLOGRAM_ITEM =
+            ITEMS.registerSimpleBlockItem("server_hologram", SERVER_HOLOGRAM_BLOCK);
+
+    public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<ServerHologramBlockEntity>> SERVER_HOLOGRAM_BE =
+            BLOCK_ENTITIES.register("server_hologram",
+                    () -> new BlockEntityType<>(ServerHologramBlockEntity::new, SERVER_HOLOGRAM_BLOCK.get()));
+
     // Creative tab (reuses the existing "itemGroup.kilagraphdemo" lang key).
     public static final DeferredHolder<CreativeModeTab, CreativeModeTab> TAB = TABS.register("kilagraphdemo",
             () -> CreativeModeTab.builder()
                     .title(Component.translatable("itemGroup.kilagraphdemo"))
                     .icon(() -> new ItemStack(HOLOGRAM_ITEM.get()))
-                    .displayItems((params, output) -> output.accept(HOLOGRAM_ITEM.get()))
+                    .displayItems((params, output) -> {
+                        output.accept(HOLOGRAM_ITEM.get());
+                        output.accept(SERVER_HOLOGRAM_ITEM.get());
+                    })
                     .build());
 
     private ModRegistries() {
