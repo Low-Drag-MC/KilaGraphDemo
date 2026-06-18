@@ -69,7 +69,7 @@ public class ServerHologramRenderer
     public void submit(ServerHologramRenderState state, PoseStack poseStack, SubmitNodeCollector collector,
                        CameraRenderState camera) {
         Quaternionf facingRotation = HologramProjection.facingRotation(state.facing);
-        HologramProjection.submitCone(poseStack, collector, facingRotation);
+        HologramProjection.submitCone(poseStack, collector, facingRotation, HologramProjection.LIGHT_CYAN);
 
         HologramDisplay display = state.display;
         if (display != null) {
@@ -99,7 +99,8 @@ public class ServerHologramRenderer
         HologramPlacement placement = blockEntity.getPlacement();
         ServerHologramDisplays.Resolved resolved = ServerHologramDisplays.resolve(blockEntity.getDisplayedWorkUid());
         float radius = resolved.display() != null ? resolved.display().renderRadius() : ModelSelection.DEFAULT_RADIUS;
-        return new AABB(blockEntity.getBlockPos()).inflate(HologramProjection.cullHalfExtent(placement, radius));
+        Direction facing = blockEntity.getBlockState().getValue(HologramBlock.FACING);
+        return HologramProjection.cullBox(blockEntity.getBlockPos(), facing, placement, radius);
     }
 
     private void submitProgressText(ServerHologramRenderState state, PoseStack poseStack,

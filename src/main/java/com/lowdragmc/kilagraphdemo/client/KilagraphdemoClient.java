@@ -2,6 +2,7 @@ package com.lowdragmc.kilagraphdemo.client;
 
 import com.lowdragmc.kilagraphdemo.Kilagraphdemo;
 import com.lowdragmc.kilagraphdemo.ModRegistries;
+import com.lowdragmc.kilagraphdemo.client.render.HologramAabbOverlay;
 import com.lowdragmc.kilagraphdemo.client.render.HologramDisplays;
 import com.lowdragmc.kilagraphdemo.client.render.HologramPlacements;
 import com.lowdragmc.kilagraphdemo.client.render.ServerHologramDisplays;
@@ -12,6 +13,7 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
+import net.neoforged.neoforge.client.event.SubmitCustomGeometryEvent;
 
 /**
  * Client-side event handling: registers the hologram block entity renderer (mod bus) and drops the
@@ -34,6 +36,7 @@ public final class KilagraphdemoClient {
         // Runtime display overrides are ephemeral — discard them so holograms revert to the default.
         HologramDisplays.clearAll();
         HologramPlacements.clearAll();
+        HologramAabbOverlay.clearAll();
         ServerHologramDisplays.clearAll();
         // Free the world-view capture texture if the editor was open at disconnect (no more capture frames
         // to flush its deferred close).
@@ -45,5 +48,11 @@ public final class KilagraphdemoClient {
         // World done, hand/overlay/GUI not yet — grab the frame for the editor's live world view.
         // No-op unless a WorldViewPanel is open (ref-counted in WorldCapture).
         WorldCapture.INSTANCE.capture();
+    }
+
+    @SubscribeEvent
+    public static void onSubmitCustomGeometry(SubmitCustomGeometryEvent event) {
+        // Draw any active "Display AABB" debug wireframes into the world. No-op when none are active.
+        HologramAabbOverlay.render(event.getSubmitNodeCollector(), event.getPoseStack());
     }
 }

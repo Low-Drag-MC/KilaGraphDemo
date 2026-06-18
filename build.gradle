@@ -9,6 +9,15 @@ plugins {
 version = mod_version
 group = mod_group_id
 
+configurations {
+    libraries
+    api.extendsFrom libraries
+
+    localImplementation
+    runtimeClasspath.extendsFrom localImplementation
+    compileOnly.extendsFrom localImplementation
+}
+
 repositories {
     mavenCentral()
     mavenLocal()
@@ -110,6 +119,8 @@ sourceSets.main.resources { srcDir 'src/generated/resources' }
 dependencies {
     implementation("com.lowdragmc.ldlib2:ldlib2-neoforge-${minecraft_version_vague}:${ldlib2_version}")
     implementation("com.lowdragmc.kilagraph:kilagraph-neoforge-${minecraft_version_vague}:${kilagraph_version}")
+
+    localImplementation(files("./libs/SlideShow-NeoForge-26.1.2-0.10.3.jar"))
 
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.10.0'
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.10.0'

@@ -1,11 +1,19 @@
 package com.lowdragmc.kilagraphdemo.client.editor;
 
 import com.lowdragmc.kilagraphdemo.Kilagraphdemo;
+import com.lowdragmc.kilagraphdemo.client.HologramProjection;
 import com.lowdragmc.kilagraphdemo.client.model.ObjContents;
 import com.lowdragmc.kilagraphdemo.client.model.SubdividedContents;
+import com.lowdragmc.kilagraphdemo.client.render.HologramAabbOverlay;
 import com.lowdragmc.kilagraphdemo.client.render.HologramDisplay;
+import com.lowdragmc.kilagraphdemo.client.render.HologramPlacements;
+import com.lowdragmc.kilagraphdemo.block.HologramBlock;
 import com.lowdragmc.kilagraphdemo.graph.ModelSelection;
 import com.lowdragmc.kilagraphdemo.graph.ModelTransform;
+import net.minecraft.client.Minecraft;
+import net.minecraft.core.Direction;
+import net.minecraft.core.GlobalPos;
+import net.minecraft.world.phys.AABB;
 import com.lowdragmc.lowdraglib2.configurator.annotation.ConfigNumber;
 import com.lowdragmc.lowdraglib2.configurator.ui.BooleanConfigurator;
 import com.lowdragmc.lowdraglib2.configurator.ui.NumberConfigurator;
@@ -38,6 +46,7 @@ public class ModelSettingsView extends View {
     private static final String LBL_QUAD = "Quad";
     private static final String LBL_CUSTOM = "Custom (OBJ)";
 
+    private final GlobalPos blockPos;
     private final HologramDisplay display;
     private final Consumer<ModelSelection> onChanged;
     private final Label info = new Label();
@@ -45,7 +54,9 @@ public class ModelSettingsView extends View {
 
     private ModelSelection model;
 
-    public ModelSettingsView(HologramDisplay display, ModelSelection initial, Consumer<ModelSelection> onChanged) {
+    public ModelSettingsView(GlobalPos blockPos, HologramDisplay display, ModelSelection initial,
+                             Consumer<ModelSelection> onChanged) {
+        this.blockPos = blockPos;
         this.display = display;
         this.onChanged = onChanged;
         this.model = initial;
@@ -62,15 +73,27 @@ public class ModelSettingsView extends View {
         addChild(selector);
 
         // Render radius applies to every model kind (drives the renderer's cull box), so it lives outside the
-        // kind-specific body and is always visible.
-        NumberConfigurator radius = new NumberConfigurator("Render radius",
+        // kind-specific body and is always visible. A "Display AABB" button next to it previews the cull box.
+        NumberConfigurator radius = new NumberConfigurator("Radius",
                 () -> model.renderRadius(),
                 n -> { model = model.withRenderRadius(n.floatValue()); apply(); },
                 model.renderRadius(), false);
         radius.setType(ConfigNumber.Type.FLOAT);
         radius.setRange(0f, 256f);
         radius.setWheel(0.5f);
-        addChild(radius);
+        radius.getLayout().flex(1);
+
+        Button aabb = new Button().setText("AABB");
+        aabb.getLayout().width(36).height(14);
+        aabb.style(s -> s.appendTooltipsString(
+                "Display the render bounding box (cull box) for the current radius + placement",
+                "as a wireframe in the world for 10s. Click again to refresh the timer."));
+        aabb.setOnClick(e -> showAabb());
+
+        UIElement radiusRow = new UIElement();
+        radiusRow.getLayout().flexDirection(FlexDirection.ROW).widthPercent(100).gapAll(2);
+        radiusRow.addChildren(radius, aabb);
+        addChild(radiusRow);
 
         // The kind-specific controls can overflow (OBJ has several rows), so host them in a scroller.
         body.getLayout().flexDirection(FlexDirection.COLUMN).widthPercent(100).gapAll(2);
@@ -137,6 +160,19 @@ public class ModelSettingsView extends View {
     private void setTransform(ModelTransform transform) {
         model = model.withTransform(transform);
         apply();
+    }
+
+    /** Show the renderer's cull box for the current radius + this block's placement as a 10s world wireframe. */
+    private void showAabb() {
+        Direction facing = Direction.UP;
+        var level = Minecraft.getInstance().level;
+        if (level != null) {
+            var bs = level.getBlockState(blockPos.pos());
+            if (bs.hasProperty(HologramBlock.FACING)) facing = bs.getValue(HologramBlock.FACING);
+        }
+        AABB box = HologramProjection.cullBox(blockPos.pos(), facing, HologramPlacements.resolve(blockPos),
+                model.renderRadius());
+        HologramAabbOverlay.show(blockPos, box);
     }
 
     /** Pick a {@code .obj} under {@code <assetsDir>/models} and use it as the display geometry. */

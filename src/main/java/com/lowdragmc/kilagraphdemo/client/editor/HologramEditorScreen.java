@@ -22,6 +22,8 @@ public class HologramEditorScreen extends ModularUIScreen {
     public HologramEditorScreen(ModularUI modularUI, HologramEditorWindow.Handle handle) {
         super(modularUI, Component.empty());
         this.handle = handle;
+        // A header "exit" button that closes the same way Esc does (prompt-on-unsaved).
+        handle.installExitButton(this::requestClose);
     }
 
     @Override

@@ -7,7 +7,10 @@ import com.lowdragmc.kilagraphdemo.client.render.HologramDisplay;
 import com.lowdragmc.kilagraphdemo.client.ui.WorldViewPanel;
 import com.lowdragmc.kilagraphdemo.graph.ModelSelection;
 import com.lowdragmc.lowdraglib2.editor.ui.SplittableWindow;
+import com.lowdragmc.lowdraglib2.gui.texture.Icons;
 import com.lowdragmc.lowdraglib2.gui.ui.UIElement;
+import com.lowdragmc.lowdraglib2.gui.ui.elements.Button;
+import net.minecraft.core.GlobalPos;
 import net.minecraft.nbt.CompoundTag;
 
 import java.util.Map;
@@ -69,9 +72,28 @@ public final class HologramEditorWindow {
             this.savedGraphTag = graphTag;
             this.savedModel = model[0];
         }
+
+        /**
+         * Add an "exit" button to the graph editor's header (right section), running {@code onExit} on click —
+         * the host screen wires this to the same close path as Esc (prompt-on-unsaved). Lives on the root graph
+         * view's header (Esc still covers subgraph-dive views).
+         */
+        public void installExitButton(Runnable onExit) {
+            Button exit = new Button();
+            exit.noText().setOnClick(e -> onExit.run());
+            exit.getLayout().width(14).heightPercent(100);
+            exit.style(s -> s.appendTooltipsString("Exit (Esc)"));
+            UIElement icon = new UIElement().addClass("__white_icon__");
+            icon.getLayout().heightPercent(100).setAspectRatio(1);
+            icon.style(s -> s.backgroundTexture(Icons.WINDOW_CLOSE));
+            exit.addChild(icon);
+            editorView.graphView.header.select(".__node-graph-view_header-right__").findFirst()
+                    .ifPresent(section -> section.addChild(exit));
+        }
     }
 
-    public static Handle build(HologramDisplay display, ModelSelection initialModel, SaveCallback onSaved) {
+    public static Handle build(GlobalPos blockPos, HologramDisplay display,
+                               ModelSelection initialModel, SaveCallback onSaved) {
         ModelSelection[] model = {initialModel};
         Handle[] handleRef = new Handle[1];
         LocalShaderFunctions store = new LocalShaderFunctions();
@@ -106,7 +128,7 @@ public final class HologramEditorWindow {
 
         // Model edits update the live display + current model, and mark the editor dirty so the work's Save
         // (and the close prompt) covers model changes — not only graph changes.
-        ModelSettingsView modelView = new ModelSettingsView(display, initialModel, m -> {
+        ModelSettingsView modelView = new ModelSettingsView(blockPos, display, initialModel, m -> {
             model[0] = m;
             editorView.markAsDirty();
         });

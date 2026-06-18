@@ -470,7 +470,7 @@ public class HologramBrowseUI implements ClientWorks.Listener {
         if (workingDisplay == null || selectedLocal == null) return;
         applyToBlock();
         WorkMeta meta = selectedLocal;
-        HologramScreens.openEditor(workingDisplay, model, (tag, newModel, resources) -> {
+        HologramScreens.openEditor(blockPos, workingDisplay, model, (tag, newModel, resources) -> {
             this.model = newModel;
             LocalGraphStore.save(new WorkPackage(meta, tag, newModel, resources));
             refreshDetail();

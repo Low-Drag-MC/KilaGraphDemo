@@ -38,9 +38,9 @@ public final class HologramScreens {
     }
 
     /** Open the editor on {@code display}; {@code onSaved} receives the graph tag, model + deps on save. */
-    public static void openEditor(HologramDisplay display, ModelSelection model,
+    public static void openEditor(GlobalPos blockPos, HologramDisplay display, ModelSelection model,
                                   HologramEditorWindow.SaveCallback onSaved) {
-        var handle = HologramEditorWindow.build(display, model, onSaved);
+        var handle = HologramEditorWindow.build(blockPos, display, model, onSaved);
         var modularUI = new ModularUI(UI.of(handle.root, StylesheetManager.ORE_MERGED));
         Minecraft.getInstance().setScreen(new HologramEditorScreen(modularUI, handle));
     }

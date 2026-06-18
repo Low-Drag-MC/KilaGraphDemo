@@ -14,6 +14,7 @@ import net.minecraft.client.renderer.blockentity.BlockEntityRendererProvider;
 import net.minecraft.client.renderer.blockentity.state.BlockEntityRenderState;
 import net.minecraft.client.renderer.feature.ModelFeatureRenderer;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
+import net.minecraft.core.Direction;
 import net.minecraft.core.GlobalPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
@@ -57,8 +58,8 @@ public class HologramRenderer implements BlockEntityRenderer<HologramBlockEntity
     public void submit(HologramRenderState state, PoseStack poseStack, SubmitNodeCollector collector,
                        CameraRenderState camera) {
         Quaternionf facingRotation = HologramProjection.facingRotation(state.facing);
-        // 1) The projector "light beam": the cyan cone, aligned to the mounting face.
-        HologramProjection.submitCone(poseStack, collector, facingRotation);
+        // 1) The projector "light beam": a green cone (server holograms use cyan), aligned to the mounting face.
+        HologramProjection.submitCone(poseStack, collector, facingRotation, HologramProjection.LIGHT_GREEN);
 
         // 2) The projected hologram: a model shaded by the displayed RenderTypeGraph, floating above the
         //    projector. Skipped (cone only) while the graph fails to compile.
@@ -88,6 +89,7 @@ public class HologramRenderer implements BlockEntityRenderer<HologramBlockEntity
         HologramPlacement placement = key == null ? HologramPlacement.DEFAULT : HologramPlacements.resolve(key);
         float radius = key == null ? com.lowdragmc.kilagraphdemo.graph.ModelSelection.DEFAULT_RADIUS
                 : HologramDisplays.resolve(key).renderRadius();
-        return new AABB(blockEntity.getBlockPos()).inflate(HologramProjection.cullHalfExtent(placement, radius));
+        Direction facing = blockEntity.getBlockState().getValue(HologramBlock.FACING);
+        return HologramProjection.cullBox(blockEntity.getBlockPos(), facing, placement, radius);
     }
 }
