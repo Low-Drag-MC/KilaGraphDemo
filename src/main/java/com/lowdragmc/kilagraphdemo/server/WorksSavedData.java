@@ -130,7 +130,7 @@ public class WorksSavedData extends SavedData {
         UploadStatus status;
         if (ownedUpdate) {
             authoritative = new WorkMeta(uid, existing.version() + 1, authorStr, player.getName().getString(),
-                    incoming.title(), incoming.description(), existing.firstUploadTime(), now);
+                    incoming.title(), incoming.description(), existing.firstUploadTime(), now, incoming.kind());
             status = UploadStatus.UPDATED;
         } else {
             if (!Kilagraphdemo.canBypassUploadLimit(player) && countFor(author) >= Kilagraphdemo.MAX_WORKS_PER_PLAYER) {
@@ -142,7 +142,7 @@ public class WorksSavedData extends SavedData {
                 uid = UUID.randomUUID().toString();
             }
             authoritative = new WorkMeta(uid, 1, authorStr, player.getName().getString(),
-                    incoming.title(), incoming.description(), now, now);
+                    incoming.title(), incoming.description(), now, now, incoming.kind());
             authorIndex.computeIfAbsent(author, k -> new HashSet<>()).add(uid);
             likes.computeIfAbsent(uid, k -> new HashSet<>());
             status = UploadStatus.PUBLISHED;
@@ -157,16 +157,27 @@ public class WorksSavedData extends SavedData {
         return new UploadResult(status, authoritative);
     }
 
-    /** Delete a work — only its author may. Returns whether anything was removed. */
+    /**
+     * Delete a work. The author may delete their own; a Creative/Op player ({@link Kilagraphdemo#canBypassUploadLimit})
+     * may delete anyone's. Returns whether anything was removed.
+     */
     public boolean delete(String uid, ServerPlayer player) {
         WorkMeta meta = metas.get(uid);
-        if (meta == null || !meta.authorUuid().equals(player.getUUID().toString())) return false;
+        if (meta == null) return false;
+        boolean isAuthor = meta.authorUuid().equals(player.getUUID().toString());
+        if (!isAuthor && !Kilagraphdemo.canBypassUploadLimit(player)) return false;
         metas.remove(uid);
         likes.remove(uid);
-        Set<String> owned = authorIndex.get(player.getUUID());
-        if (owned != null) {
-            owned.remove(uid);
-            if (owned.isEmpty()) authorIndex.remove(player.getUUID());
+        // Clean the index under the work's actual author (an op may delete someone else's work).
+        try {
+            UUID authorId = UUID.fromString(meta.authorUuid());
+            Set<String> owned = authorIndex.get(authorId);
+            if (owned != null) {
+                owned.remove(uid);
+                if (owned.isEmpty()) authorIndex.remove(authorId);
+            }
+        } catch (IllegalArgumentException ignored) {
+            // malformed/blank author uuid — nothing to clean in the index
         }
         try {
             Files.deleteIfExists(payloadFile(uid));

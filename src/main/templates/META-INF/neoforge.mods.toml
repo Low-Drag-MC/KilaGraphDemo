@@ -38,6 +38,11 @@ description = '''${mod_description}'''
 [[mixins]]
 config = "${mod_id}.mixins.json"
 
+# SlideShow-compat mixins. The config's plugin (SlideShowMixinPlugin) skips every mixin when the
+# 'slide_show' mod is absent, so this is inert without SlideShow.
+[[mixins]]
+config = "${mod_id}.slideshow.mixins.json"
+
 # The [[accessTransformers]] block allows you to declare where your AT file is.
 # If this block is omitted, a fallback attempt will be made to load an AT from META-INF/accesstransformer.cfg
 #[[accessTransformers]]
@@ -78,6 +83,14 @@ type = "required"
 # This version range declares a minimum of the current minecraft version up to but not including the next major version
 versionRange = "${kilagraph_version_range}"
 ordering = "NONE"
+side = "BOTH"
+
+# Optional SlideShow compatibility — when present, load after it so our projector mixins apply.
+[[dependencies."${mod_id}"]]
+modId = "slide_show"
+type = "optional"
+versionRange = "*"
+ordering = "AFTER"
 side = "BOTH"
 
 # Features are specific properties of the game environment, that you may want to declare you require. This example declares

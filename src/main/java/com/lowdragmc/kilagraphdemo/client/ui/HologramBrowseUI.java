@@ -221,6 +221,7 @@ public class HologramBrowseUI implements ClientWorks.Listener {
         serverListContainer.clearAllChildren();
         serverRows.clear();
         List<ServerWorkEntry> entries = new ArrayList<>(ClientWorks.serverWorks());
+        entries.removeIf(e -> e.meta().isSlideShow()); // SlideShow graph works belong to the projector browser
         if (mineOnly) entries.removeIf(e -> !isMine(e));
         entries.sort(sortMode.comparator);
         int index = 1;
@@ -273,6 +274,7 @@ public class HologramBrowseUI implements ClientWorks.Listener {
         localRows.clear();
         String displayedUid = blockEntity == null ? null : blockEntity.getDisplayedWorkUid();
         for (WorkMeta meta : LocalGraphStore.list()) {
+            if (meta.isSlideShow()) continue; // SlideShow graph works belong to the projector browser
             String title = meta.title() + (meta.uid().equals(displayedUid) ? "  (displayed)" : "");
             UIElement row = createRow(title, () -> onSelectLocal(meta), meta);
             localRows.put(meta.uid(), row);
@@ -397,10 +399,15 @@ public class HologramBrowseUI implements ClientWorks.Listener {
         }
         actions.addChild(new Button().setText(entry.likedByMe() ? "Unlike" : "Like")
                 .setOnClick(e -> ClientWorks.setLike(m.uid(), !entry.likedByMe())));
-        // Deleting your published work happens here (on the server entry), not on the local copy.
-        if (isMine(entry)) {
+        // Deleting a published work happens here (on the server entry), not on the local copy. The author
+        // may delete their own; a Creative/Op player may delete anyone's.
+        if (isMine(entry) || (Minecraft.getInstance().player != null
+                && Kilagraphdemo.canBypassUploadLimit(Minecraft.getInstance().player))) {
             actions.addChild(new Button().setText("Delete from server")
-                    .setOnClick(e -> ClientWorks.delete(m.uid())));
+                    .setOnClick(e -> {
+                        clearDisplayIfShowing(m.uid());
+                        ClientWorks.delete(m.uid());
+                    }));
         }
     }
 
@@ -499,6 +506,14 @@ public class HologramBrowseUI implements ClientWorks.Listener {
         if (Minecraft.getInstance().player == null) return;
         String myUuid = Minecraft.getInstance().player.getUUID().toString();
 
+        // A description is required to publish (so shared works are documented).
+        String desc = String.join("\n", descriptionField.getValue());
+        if (desc.isBlank()) {
+            Dialog.showNotification("Description required",
+                    "Please write a description before uploading.", null).show(root);
+            return;
+        }
+
         // Quota pre-check (the server enforces it too): publishing creates a NEW server work unless this is an
         // update to my already-published work. Updating is always allowed; a new work needs count < limit.
         boolean mineWork = selectedLocal.authorUuid().isEmpty() || selectedLocal.authorUuid().equals(myUuid);
@@ -511,7 +526,6 @@ public class HologramBrowseUI implements ClientWorks.Listener {
             return;
         }
 
-        String desc = String.join("\n", descriptionField.getValue());
         LocalGraphStore.load(selectedLocal.uid()).ifPresent(pkg -> {
             String author = pkg.meta().authorUuid();
             boolean mine = author.isEmpty() || author.equals(myUuid);
@@ -559,6 +573,7 @@ public class HologramBrowseUI implements ClientWorks.Listener {
 
     /** Delete the local work file. (Server copies are deleted from the server entry's panel instead.) */
     private void onDeleteLocal(String uid) {
+        clearDisplayIfShowing(uid);
         LocalGraphStore.delete(uid);
         if (selectedLocal != null && selectedLocal.uid().equals(uid)) {
             selectedLocal = null;
@@ -566,6 +581,14 @@ public class HologramBrowseUI implements ClientWorks.Listener {
         }
         refreshLocalList();
         refreshDetail();
+    }
+
+    /** If this block currently displays {@code uid}, clear the display (a deleted work must not linger). */
+    private void clearDisplayIfShowing(String uid) {
+        if (isCurrentlyDisplayed(uid)) {
+            HologramDisplays.clearOverride(blockPos);
+            if (blockEntity != null) blockEntity.setDisplayedWorkUid("");
+        }
     }
 
     // ---- rename ------------------------------------------------------------------------------
