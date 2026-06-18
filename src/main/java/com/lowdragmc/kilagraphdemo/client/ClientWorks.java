@@ -131,6 +131,9 @@ public final class ClientWorks {
                     cacheTextures(pkg);
                     cacheModels(pkg);
                     LocalGraphStore.save(pkg);
+                    // Drop any stale compiled SlideShow material for this work so it recompiles from the
+                    // freshly-downloaded payload (no-op for hologram works).
+                    com.lowdragmc.kilagraphdemo.slideshow.client.ClientProjectorGraphs.onWorkSaved(pkg.meta());
                 } catch (IOException e) {
                     LOGGER.error("[KilaGraphDemo] failed to parse downloaded work {}", uid, e);
                     return;

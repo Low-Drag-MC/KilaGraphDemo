@@ -103,6 +103,21 @@ public final class WorkPackage {
         return RenderTypeGraphResource.INSTANCE.deserializeGraph(graphTag.copy(), bundledResolver());
     }
 
+    /** The raw serialized graph payload (resource-specific layout). */
+    public CompoundTag graphTag() {
+        return graphTag;
+    }
+
+    /**
+     * Deserialize the stored graph with a caller-supplied resource deserializer (node-model layout +
+     * reference resolver), reusing the package's bundled Shader-Function {@link #resources}. Lets a
+     * non-RenderType graph variant (e.g. a {@code SlideShowGraph}) be loaded without hard-coding its
+     * resource here. The deserializer receives a private copy of the tag and the bundled resolver.
+     */
+    public <G extends Graph> G loadGraph(java.util.function.BiFunction<CompoundTag, IGraphReferenceResolver, G> deserializer) {
+        return deserializer.apply(graphTag.copy(), bundledResolver());
+    }
+
     private IGraphReferenceResolver bundledResolver() {
         return new IGraphReferenceResolver() {
             @Override

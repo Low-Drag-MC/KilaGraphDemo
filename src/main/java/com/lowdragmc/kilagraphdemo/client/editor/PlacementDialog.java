@@ -49,6 +49,13 @@ public final class PlacementDialog {
         content.addChild(spin);
 
         dialog.addContent(content);
+        // Reset to defaults. The configurators read their value once, so reopen the dialog (rebuilt from
+        // DEFAULT) rather than refreshing each field in place; the live onChange is fired too.
+        dialog.addButton(new Button().setText("Reset").setOnClick(e -> {
+            onChange.accept(HologramPlacement.DEFAULT);
+            dialog.close();
+            open(anchor, HologramPlacement.DEFAULT, onChange, onApply);
+        }));
         if (onApply != null) {
             dialog.addButton(new Button().setText("Apply").setOnClick(e -> {
                 onApply.accept(cur[0]);

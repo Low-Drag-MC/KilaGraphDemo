@@ -30,6 +30,11 @@ public class ServerHologramBlock extends HologramBlock {
     @Override
     protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player,
                                                BlockHitResult hitResult) {
+        // Server holograms are op/creative-only — both opening and editing the browser. Regular holograms
+        // (the superclass) stay free for everyone.
+        if (!com.lowdragmc.kilagraphdemo.Kilagraphdemo.canBypassUploadLimit(player)) {
+            return InteractionResult.PASS;
+        }
         // Open the client-only server browser. The client class is referenced only inside this guard, so a
         // dedicated server never classloads it.
         if (level.isClientSide()) {
