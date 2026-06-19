@@ -1,5 +1,8 @@
 package com.lowdragmc.kilagraphdemo;
 
+import com.lowdragmc.kilagraphdemo.block.DroneStationBlock;
+import com.lowdragmc.kilagraphdemo.block.DroneStationBlockEntity;
+import com.lowdragmc.kilagraphdemo.block.FertileSoilBlock;
 import com.lowdragmc.kilagraphdemo.block.HologramBlock;
 import com.lowdragmc.kilagraphdemo.block.HologramBlockEntity;
 import com.lowdragmc.kilagraphdemo.block.ServerHologramBlock;
@@ -52,6 +55,30 @@ public final class ModRegistries {
             BLOCK_ENTITIES.register("server_hologram",
                     () -> new BlockEntityType<>(ServerHologramBlockEntity::new, SERVER_HOLOGRAM_BLOCK.get()));
 
+    // --- Drone Farm mini-game -------------------------------------------------------------------
+
+    // Fertile soil: the plantable playfield (placeholder model reuses vanilla farmland).
+    public static final DeferredBlock<FertileSoilBlock> FERTILE_SOIL_BLOCK = BLOCKS.registerBlock(
+            "fertile_soil",
+            FertileSoilBlock::new,
+            p -> p.strength(0.6f));
+
+    public static final DeferredItem<?> FERTILE_SOIL_ITEM =
+            ITEMS.registerSimpleBlockItem("fertile_soil", FERTILE_SOIL_BLOCK);
+
+    // Drone programming station: owns the virtual drone + drives the farming run.
+    public static final DeferredBlock<DroneStationBlock> DRONE_STATION_BLOCK = BLOCKS.registerBlock(
+            "drone_station",
+            DroneStationBlock::new,
+            p -> p.noOcclusion().strength(2f));
+
+    public static final DeferredItem<?> DRONE_STATION_ITEM =
+            ITEMS.registerSimpleBlockItem("drone_station", DRONE_STATION_BLOCK);
+
+    public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<DroneStationBlockEntity>> DRONE_STATION_BE =
+            BLOCK_ENTITIES.register("drone_station",
+                    () -> new BlockEntityType<>(DroneStationBlockEntity::new, DRONE_STATION_BLOCK.get()));
+
     // Creative tab (reuses the existing "itemGroup.kilagraphdemo" lang key).
     public static final DeferredHolder<CreativeModeTab, CreativeModeTab> TAB = TABS.register("kilagraphdemo",
             () -> CreativeModeTab.builder()
@@ -60,6 +87,8 @@ public final class ModRegistries {
                     .displayItems((params, output) -> {
                         output.accept(HOLOGRAM_ITEM.get());
                         output.accept(SERVER_HOLOGRAM_ITEM.get());
+                        output.accept(FERTILE_SOIL_ITEM.get());
+                        output.accept(DRONE_STATION_ITEM.get());
                     })
                     .build());
 

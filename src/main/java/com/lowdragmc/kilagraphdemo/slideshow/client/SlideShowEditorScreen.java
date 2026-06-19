@@ -51,6 +51,6 @@ public class SlideShowEditorScreen extends ModularUIScreen {
     }
 
     private void closeNow() {
-        Minecraft.getInstance().setScreen(null);
+        Minecraft.getInstance().popGuiLayer();
     }
 }

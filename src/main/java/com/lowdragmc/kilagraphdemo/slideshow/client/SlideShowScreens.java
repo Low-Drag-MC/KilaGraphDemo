@@ -32,11 +32,11 @@ public final class SlideShowScreens {
     public static void openEditor(SlideShowGraph graph, SlideShowEditorWindow.SaveCallback onSaved) {
         var handle = SlideShowEditorWindow.build(graph, onSaved);
         var modularUI = new ModularUI(UI.of(handle.root, StylesheetManager.ORE_MERGED));
-        Minecraft.getInstance().setScreen(new SlideShowEditorScreen(modularUI, handle));
+        Minecraft.getInstance().pushGuiLayer(new SlideShowEditorScreen(modularUI, handle));
     }
 
     private static void setScreen(UIElement root) {
         var modularUI = new ModularUI(UI.of(root, StylesheetManager.ORE_MERGED));
-        Minecraft.getInstance().setScreen(new ModularUIScreen(modularUI, Component.empty()));
+        Minecraft.getInstance().pushGuiLayer(new ModularUIScreen(modularUI, Component.empty()));
     }
 }

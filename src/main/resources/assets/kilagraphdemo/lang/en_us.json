@@ -2,6 +2,9 @@
   "itemGroup.kilagraphdemo": "KilaGraph Mod Tab",
   "block.kilagraphdemo.hologram": "Hologram",
   "block.kilagraphdemo.server_hologram": "Server Hologram",
+  "block.kilagraphdemo.fertile_soil": "Fertile Soil",
+  "block.kilagraphdemo.drone_station": "Drone Programming Station",
+  "message.kilagraphdemo.drone_no_field": "No fertile soil beneath the station — place Fertile Soil directly below it.",
 
   "rt_file_texture": "File Texture",
   "kg.filetexture.file": "File",

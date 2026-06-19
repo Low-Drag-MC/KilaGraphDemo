@@ -26,6 +26,8 @@ public final class ModNetworking {
         registrar.playToServer(C2SSetServerHologram.TYPE, C2SSetServerHologram.CODEC, C2SSetServerHologram::execute);
         registrar.playToServer(C2SSetServerHologramPlacement.TYPE, C2SSetServerHologramPlacement.CODEC,
                 C2SSetServerHologramPlacement::execute);
+        registrar.playToServer(C2SDroneControl.TYPE, C2SDroneControl.CODEC, C2SDroneControl::execute);
+        registrar.playToServer(C2SSaveDroneProgram.TYPE, C2SSaveDroneProgram.CODEC, C2SSaveDroneProgram::execute);
         // SlideShow projector-graph control — only when SlideShow is present (the projector block entity that
         // carries the state only exists then). Both sides evaluate this identically, so the protocol stays symmetric.
         if (net.neoforged.fml.ModList.get().isLoaded("slide_show")) {

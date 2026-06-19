@@ -2,7 +2,7 @@
 
 <div align="center">
 
-**A Demo Mod of KilGraph.**
+**A Demo Mod of KilaGraph.**
 
 [![NeoForge](https://img.shields.io/badge/NeoForge-26.1+-E04E14?style=for-the-badge)](https://neoforged.net/)
 [![LDLib2](https://img.shields.io/badge/Built%20on-LDLib2-2F80ED?style=for-the-badge)](https://github.com/Low-Drag-MC/LDLib2)

@@ -38,7 +38,7 @@ public abstract class ProjectorScreenMixin extends AbstractContainerScreen<Proje
         BlockPos pos = getMenu().tilePos;
         Button button = Button.builder(Component.literal("Graph…"), b -> {
             Level level = player.level();
-            Minecraft.getInstance().setScreen(null); // close the container menu first
+//            Minecraft.getInstance().setScreen(null); // close the container menu first
             SlideShowScreens.openBrowse(level, pos);
         }).bounds(this.leftPos + this.imageWidth + 4, this.topPos, 56, 20).build();
         addRenderableWidget(button);

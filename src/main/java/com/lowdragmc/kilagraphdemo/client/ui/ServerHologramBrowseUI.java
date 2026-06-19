@@ -179,6 +179,7 @@ public class ServerHologramBrowseUI implements ClientWorks.Listener {
         serverListContainer.clearAllChildren();
         serverRows.clear();
         List<ServerWorkEntry> entries = new ArrayList<>(ClientWorks.serverWorks());
+        entries.removeIf(e -> e.meta().isSlideShow()); // SlideShow graph works belong to the projector browser
         entries.sort(sortMode.comparator);
         int index = 1;
         for (ServerWorkEntry entry : entries) {

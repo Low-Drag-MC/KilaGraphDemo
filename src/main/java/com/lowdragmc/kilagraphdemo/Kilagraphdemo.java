@@ -1,5 +1,6 @@
 package com.lowdragmc.kilagraphdemo;
 
+import com.lowdragmc.kilagraphdemo.drone.DroneGameTests;
 import com.lowdragmc.kilagraphdemo.network.ModNetworking;
 import com.lowdragmc.lowdraglib2.LDLib2;
 import com.mojang.logging.LogUtils;
@@ -23,6 +24,7 @@ public class Kilagraphdemo {
     public Kilagraphdemo(IEventBus modEventBus, ModContainer modContainer) {
         ModRegistries.init(modEventBus);
         modEventBus.addListener(ModNetworking::register);
+        DroneGameTests.init(modEventBus);
         ASSETS_PATH = new File(LDLib2.getAssetsDir(), MODID);
         if (ASSETS_PATH.mkdirs()) {
             LOGGER.info("Assets directory created: {}", ASSETS_PATH.getAbsolutePath());
