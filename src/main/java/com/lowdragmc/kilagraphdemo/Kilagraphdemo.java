@@ -17,7 +17,7 @@ import java.io.File;
 public class Kilagraphdemo {
     public static final String MODID = "kilagraphdemo";
     /** Max works a normal player may publish to a server (see {@link #canBypassUploadLimit}). Static knob. */
-    public static int MAX_WORKS_PER_PLAYER = 3;
+    public static int MAX_WORKS_PER_PLAYER = 2;
     private static final Logger LOGGER = LogUtils.getLogger();
     private static File ASSETS_PATH;
 

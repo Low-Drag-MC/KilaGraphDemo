@@ -13,7 +13,7 @@ import com.lowdragmc.lowdraglib2.nodegraphtookit.api.node.NodeAttribute;
 @NodeAttribute(name = "drone.harvest", group = "drone", graphTypes = DroneGraph.class)
 public class HarvestNode extends DroneActionNode {
 
-    public static final int DURATION = 8;
+    public static final int DURATION = 3;
 
     @OutputPort
     public int gained;

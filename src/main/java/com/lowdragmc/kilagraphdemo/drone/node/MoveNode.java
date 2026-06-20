@@ -12,7 +12,7 @@ import net.minecraft.core.Direction;
 @NodeAttribute(name = "drone.move", group = "drone", graphTypes = DroneGraph.class)
 public class MoveNode extends DroneActionNode {
 
-    public static final int DURATION = 10;
+    public static final int DURATION = 4;
 
     @InputPort
     public Direction direction = Direction.NORTH;

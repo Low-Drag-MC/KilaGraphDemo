@@ -109,10 +109,14 @@ public class DroneRuntime {
         return api;
     }
 
-    /** UID of the node about to execute (for runtime graph visualization), or {@code null}. */
+    /**
+     * UID of the node currently occupying the drone (for runtime graph highlight), or {@code null}.
+     * Uses {@link ExecSession#lastExecuted()} — the node that actually ran — rather than the next node,
+     * so the highlight tracks the executing action even inside a {@code While}/{@code For} body.
+     */
     @Nullable
     public UUID currentNodeUid() {
-        NodeModel n = session.currentNode();
+        NodeModel n = session.lastExecuted();
         return n != null ? n.getUid() : null;
     }
 

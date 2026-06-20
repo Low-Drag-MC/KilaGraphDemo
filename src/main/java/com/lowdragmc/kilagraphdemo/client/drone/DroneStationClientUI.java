@@ -25,6 +25,7 @@ import com.lowdragmc.lowdraglib2.gui.ui.data.Horizontal;
 import com.lowdragmc.lowdraglib2.gui.ui.data.Vertical;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Button;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Label;
+import com.lowdragmc.lowdraglib2.gui.ui.elements.SplitView;
 import com.lowdragmc.lowdraglib2.gui.ui.event.UIEvents;
 import com.lowdragmc.lowdraglib2.gui.ui.style.StylesheetManager;
 import com.lowdragmc.lowdraglib2.nodegraphtookit.api.graph.Graph;
@@ -91,6 +92,11 @@ public final class DroneStationClientUI {
     private static final double FLY_SPEED = 0.45;
     private static final float LOOK_SENSITIVITY = 0.15f;
     private static final double ZOOM_STEP = 1.0;
+    /**
+     * Horizontal offset of the top-down camera so the farm frames into the screen's right half (the left
+     * half is the editor). Camera shifts in -X so the farm's image moves +X (right); flip if it's wrong.
+     */
+    private static final double VIEW_SHIFT_X = 8;
 
     private DroneStationClientUI(BlockPos stationPos, boolean owner, DroneMenuSync.Bindings sync) {
         this.stationPos = stationPos;
@@ -115,15 +121,18 @@ public final class DroneStationClientUI {
         // Root is a transparent full-screen row: the left half holds the editor panel, the right half is
         // left empty so the world (the farm board) shows through behind the menu screen — the menu's
         // ModularUIContainerScreen draws no background of its own.
-        root.getLayout().widthPercent(100).heightPercent(100).flexDirection(FlexDirection.ROW);
+        root.getLayout().widthPercent(100).heightPercent(100);
 
         UIElement leftPanel = new UIElement().addClass("panel_bg");
-        leftPanel.getLayout().widthPercent(50).heightPercent(100).flexDirection(FlexDirection.COLUMN).gapAll(2).paddingAll(2);
-        root.addChild(leftPanel);
+        leftPanel.getLayout().widthPercent(100).heightPercent(100).flexDirection(FlexDirection.COLUMN).gapAll(2).paddingAll(2);
 
-        // Right half: empty + transparent, so the world is visible (R4.3 adds free-fly camera control here).
-        worldPanel.getLayout().widthPercent(50).heightPercent(100);
-        root.addChild(worldPanel);
+        // Right half stays transparent so the world shows through; left holds the editor. The split bar
+        // between them is draggable so the player can resize the editor vs. the farm view.
+        worldPanel.getLayout().widthPercent(100).heightPercent(100);
+        SplitView.Horizontal split = new SplitView.Horizontal();
+        split.getLayout().widthPercent(100).heightPercent(100);
+        split.left(leftPanel).right(worldPanel).setPercentage(50);
+        root.addChild(split);
 
         // Open with a placeholder; the stored program loads once it arrives over the sync channel.
         loadIntoEditor(newProgram());
@@ -145,11 +154,15 @@ public final class DroneStationClientUI {
         refreshStatus(RunState.IDLE);
     }
 
-    /** Point the override camera above and just south of the station, looking down over the field. */
+    /**
+     * Top-down orthographic view: camera straight above the station looking down, shifted horizontally so
+     * the farm sits in the visible right half of the screen (the left half is the editor panel). If the
+     * farm ends up on the wrong side, flip the sign of {@link #VIEW_SHIFT_X}.
+     */
     private void activateCamera() {
         Vec3 center = Vec3.atCenterOf(stationPos);
-        Vec3 camPos = center.add(0, 10, 6); // 10 blocks up, 6 south
-        CameraOverrideManager.INSTANCE.activate(camPos, 180f, 55f, center, FLY_RADIUS); // face north, look down
+        Vec3 camPos = center.add(VIEW_SHIFT_X, 24, 0); // straight above; X-shift frames it into the right half
+        CameraOverrideManager.INSTANCE.activate(camPos, 0f, 90f, center, FLY_RADIUS); // pitch 90 = straight down
     }
 
     /**
@@ -196,15 +209,17 @@ public final class DroneStationClientUI {
      * sibling of the editor, so its buttons are unaffected.
      */
     private void installReadOnlyGuard() {
-        String[] editingEvents = {
-                UIEvents.MOUSE_DOWN, UIEvents.MOUSE_UP, UIEvents.MOUSE_WHEEL,
-                UIEvents.KEY_DOWN, UIEvents.EXECUTE_COMMAND, UIEvents.DRAG_PERFORM,
-        };
-        for (String type : editingEvents) {
+        // Block editing (left-button drag/select/wire, right-click create menu, keyboard delete/commands,
+        // library drops) — but keep navigation: mouse wheel (zoom) and middle/right-button pan stay live.
+        editorView.addEventListener(UIEvents.MOUSE_DOWN, e -> {
+            if (readOnly && e.button == 0) e.stopPropagation();
+        }, true);
+        editorView.addEventListener(UIEvents.MOUSE_UP, e -> {
+            if (readOnly && (e.button == 0 || e.button == 1)) e.stopPropagation();
+        }, true);
+        for (String type : new String[]{UIEvents.KEY_DOWN, UIEvents.EXECUTE_COMMAND, UIEvents.DRAG_PERFORM}) {
             editorView.addEventListener(type, e -> {
-                if (readOnly) {
-                    e.stopPropagation();
-                }
+                if (readOnly) e.stopPropagation();
             }, true);
         }
     }

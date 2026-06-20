@@ -204,7 +204,7 @@ public class DroneStationBlockEntity extends BlockEntity implements ISyncPersist
         FarmSimulation sim = FarmSimulation.of(field.width(), field.height(), field.fertile(), FarmConfig.DEFAULT);
         int startX = clamp(getBlockPos().getX() - field.originX(), field.width());
         int startZ = clamp(getBlockPos().getZ() - field.originZ(), field.height());
-        DroneApi api = new DroneApi(sim, startX, startZ, TOTAL_TICKS);
+        DroneApi api = new DroneApi(sim, startX, startZ);
         DroneGraph graph = DroneGraphCodec.fromTag(programTag, serverLevel.registryAccess());
 
         this.runtime = new DroneRuntime(graph, api, RUN_SEED);
@@ -342,11 +342,21 @@ public class DroneStationBlockEntity extends BlockEntity implements ISyncPersist
                 || level.getServer().getPlayerList().getPlayer(o) == null;
     }
 
-    /** Snapshot the farm grid into {@link #cells}: {@code stage | (mergeSize << 8)} per cell. */
+    /**
+     * Snapshot the farm grid into {@link #cells}: {@code stage | (mergeSize << 8)} per cell.
+     *
+     * <p><b>Reuses the existing array in place when the size matches</b>, rather than allocating a fresh
+     * one each tick. This is required for the {@code @DescSynced} delta to fire: LDLib2's
+     * {@code DirectArrayRef} only marks an array field dirty when its <em>elements</em> change on the
+     * <em>same</em> reference; a brand-new array each tick takes its reassignment branch, which marks only
+     * the child refs and never the field itself, so {@code sync(false)} would never transmit it and the
+     * client board would stay empty.</p>
+     */
     private void captureCells(FarmSimulation sim) {
         int w = sim.getWidth();
         int h = sim.getHeight();
-        int[] arr = new int[w * h];
+        int n = w * h;
+        int[] arr = cells.length == n ? cells : new int[n];
         for (int z = 0; z < h; z++) {
             for (int x = 0; x < w; x++) {
                 arr[z * w + x] = sim.getStage(x, z).ordinal() | (sim.getMergeSize(x, z) << 8);

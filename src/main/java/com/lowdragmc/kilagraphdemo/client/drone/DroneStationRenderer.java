@@ -1,17 +1,24 @@
 package com.lowdragmc.kilagraphdemo.client.drone;
 
+import com.lowdragmc.kilagraphdemo.Kilagraphdemo;
 import com.lowdragmc.kilagraphdemo.block.DroneStationBlockEntity;
 import com.lowdragmc.kilagraphdemo.farm.Stage;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
+import com.mojang.math.Axis;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderer;
 import net.minecraft.client.renderer.blockentity.BlockEntityRendererProvider;
 import net.minecraft.client.renderer.blockentity.state.BlockEntityRenderState;
 import net.minecraft.client.renderer.feature.ModelFeatureRenderer;
+import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
+import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.core.BlockPos;
+import net.minecraft.resources.Identifier;
+import net.minecraft.util.LightCoordsUtil;
+import net.minecraft.util.Mth;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -21,22 +28,34 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Renders a drone station's live game board: the pumpkins on its field (colored cubes scaled by stage,
- * a single oversized cube for a merged N×N block) and the drone hovering over its current cell with a
- * smooth eased motion. Reads the server-synced snapshot off the {@link DroneStationBlockEntity}.
+ * Renders a drone station's live game board: textured pumpkins on its field (cubes that sit on the soil
+ * with a small gap from their neighbours; a merged N×N block renders as one larger cube whose top texture
+ * stretches over the footprint; rotten pumpkins are tinted green) and a quad-rotor drone that hovers over
+ * its current cell — bobbing, spinning its rotors, and leaning into its movement.
  *
- * <p>First-cut visuals use solid colored cubes ({@link RenderTypes#debugQuads()}); textured pumpkin
- * models are a later polish. The station block sits at local origin; the field's soil top is local
- * {@code y=0} (soil is the block below), so pumpkins grow upward from {@code y=0}.</p>
+ * <p>Pumpkins use the {@code pumpkin_side}/{@code pumpkin_top} textures via {@link RenderTypes#entityCutout};
+ * the drone is solid-coloured geometry ({@link RenderTypes#debugQuads()}). The station block sits at local
+ * origin, soil top is local {@code y=0}, so pumpkins grow upward from {@code y=0}.</p>
  */
 public class DroneStationRenderer implements BlockEntityRenderer<DroneStationBlockEntity, DroneStationRenderState> {
 
-    /** Drone hover height above the soil, in block units (above the station's top). */
-    private static final float DRONE_HOVER = 1.4f;
-    private static final float DRONE_HALF = 0.22f;
-    private static final float EASE = 0.18f;
+    private static final Identifier PUMPKIN_SIDE =
+            Identifier.fromNamespaceAndPath(Kilagraphdemo.MODID, "textures/block/pumpkin_side.png");
+    private static final Identifier PUMPKIN_TOP =
+            Identifier.fromNamespaceAndPath(Kilagraphdemo.MODID, "textures/block/pumpkin_top.png");
 
-    /** Per-station eased drone position (local field coords), so motion lerps between synced cells. */
+    private static final int LIGHT = LightCoordsUtil.FULL_BRIGHT;
+    private static final int OVERLAY = OverlayTexture.NO_OVERLAY;
+
+    /** Gap between a pumpkin cube and its cell edge, so neighbours don't touch. */
+    private static final float PUMPKIN_PAD = 0.09f;
+    private static final float DRONE_HOVER = 1.4f;
+    private static final float EASE = 0.2f;
+    /** Degrees of lean per block/tick of horizontal speed, capped so a fast hop doesn't flip the drone. */
+    private static final float TILT_PER_SPEED = 320f;
+    private static final float TILT_MAX = 32f;
+
+    /** Per-station eased drone state {@code {curX, curZ, velX, velZ}} for smooth motion + lean. */
     private static final Map<BlockPos, float[]> EASED = new HashMap<>();
 
     public DroneStationRenderer(BlockEntityRendererProvider.Context context) {
@@ -59,9 +78,8 @@ public class DroneStationRenderer implements BlockEntityRenderer<DroneStationBlo
         state.cells = be.getCells();
         state.droneX = be.getDroneX();
         state.droneZ = be.getDroneZ();
-        // Key visibility off the field geometry (a plain synced int), not the cells array: an array
-        // shrinking back to empty on reset is not a reliable @DescSynced delta, so the drone/board could
-        // otherwise linger after a run ends.
+        // Visibility keys off the field geometry (a plain synced int), not the cells array: an array
+        // shrinking back to empty on reset is not a reliable @DescSynced delta.
         state.active = be.getFieldWidth() > 0;
         Level level = be.getLevel();
         state.time = level == null ? 0f : (level.getGameTime() + partialTicks);
@@ -70,13 +88,27 @@ public class DroneStationRenderer implements BlockEntityRenderer<DroneStationBlo
     @Override
     public void submit(DroneStationRenderState state, PoseStack poseStack, SubmitNodeCollector collector,
                        CameraRenderState camera) {
-        collector.submitCustomGeometry(poseStack, RenderTypes.debugQuads(), (pose, buf) -> {
-            drawPumpkins(pose, buf, state);
-            drawDrone(pose, buf, state);
-        });
+        // Pumpkins: two textured passes (side faces, then top/bottom faces) so each pass binds one texture.
+        collector.submitCustomGeometry(poseStack, RenderTypes.entityCutout(PUMPKIN_SIDE),
+                (pose, buf) -> forEachPumpkin(state, (x0, z0, size, height, r, g, b) ->
+                        emitSides(pose, buf, x0, z0, size, height, r, g, b)));
+        collector.submitCustomGeometry(poseStack, RenderTypes.entityCutout(PUMPKIN_TOP),
+                (pose, buf) -> forEachPumpkin(state, (x0, z0, size, height, r, g, b) ->
+                        emitTopBottom(pose, buf, x0, z0, size, height, r, g, b)));
+
+        submitDrone(state, poseStack, collector);
     }
 
-    private void drawPumpkins(PoseStack.Pose pose, VertexConsumer buf, DroneStationRenderState state) {
+    // ---- pumpkins -----------------------------------------------------------------------------
+
+    @FunctionalInterface
+    private interface PumpkinSink {
+        /** {@code (x0,z0)} = field-local NW corner of the footprint; {@code size} cells wide/deep. */
+        void accept(float x0, float z0, int size, float height, int r, int g, int b);
+    }
+
+    /** Walk the field grid and feed each visible pumpkin's footprint + colour to {@code sink}. */
+    private void forEachPumpkin(DroneStationRenderState state, PumpkinSink sink) {
         int w = state.fieldWidth;
         int h = state.fieldHeight;
         if (w <= 0 || h <= 0 || state.cells.length < w * h) return;
@@ -84,63 +116,119 @@ public class DroneStationRenderer implements BlockEntityRenderer<DroneStationBlo
             for (int x = 0; x < w; x++) {
                 int cell = state.cells[z * w + x];
                 Stage stage = Stage.values()[cell & 0xFF];
-                int merge = (cell >> 8) & 0xFF;
+                int merge = Math.max(1, (cell >> 8) & 0xFF);
                 float bx = state.fieldOffX + x;
                 float bz = state.fieldOffZ + z;
                 switch (stage) {
-                    case GROWING -> cube(pose, buf, bx + 0.25f, 0f, bz + 0.25f, bx + 0.75f, 0.5f, bz + 0.75f,
-                            0x4C, 0xAF, 0x50);                       // green sprout
-                    case RIPE -> {
-                        int n = Math.max(1, merge);
-                        float pad = n == 1 ? 0.1f : 0.05f;
-                        cube(pose, buf, bx + pad, 0f, bz + pad, bx + n - pad, 0.55f * n, bz + n - pad,
-                                0xE0, 0x80, 0x20);                   // pumpkin orange (big for merged)
-                    }
-                    case ROTTEN -> cube(pose, buf, bx + 0.15f, 0f, bz + 0.15f, bx + 0.85f, 0.55f, bz + 0.85f,
-                            0x5A, 0x40, 0x30);                       // dark, rotten
-                    default -> { }                                   // EMPTY / MERGED_MEMBER: nothing
+                    case GROWING -> sink.accept(bx, bz, 1, 0.45f, 0x6F, 0xB0, 0x4A);   // small, greenish
+                    case RIPE -> sink.accept(bx, bz, merge, 0.55f * merge, 0xFF, 0xFF, 0xFF); // textured, white tint
+                    case ROTTEN -> sink.accept(bx, bz, 1, 0.5f, 0x5C, 0x8A, 0x32);     // green-tinted = rotten
+                    default -> { }                                                      // EMPTY / MERGED_MEMBER
                 }
             }
         }
     }
 
-    private void drawDrone(PoseStack.Pose pose, VertexConsumer buf, DroneStationRenderState state) {
-        float targetX, targetZ;
-        if (state.active) {
-            targetX = state.fieldOffX + state.droneX + 0.5f;
-            targetZ = state.fieldOffZ + state.droneZ + 0.5f;
-        } else {
-            targetX = 0.5f; // parked above the station block when idle
-            targetZ = 0.5f;
-        }
-        float[] cur = EASED.computeIfAbsent(state.pos, k -> new float[]{targetX, targetZ});
-        cur[0] += (targetX - cur[0]) * EASE;
-        cur[1] += (targetZ - cur[1]) * EASE;
-
-        float bob = (float) Math.sin(state.time * 0.15f) * 0.06f;
-        float cx = cur[0];
-        float cz = cur[1];
-        float y = DRONE_HOVER + bob;
-        cube(pose, buf, cx - DRONE_HALF, y - DRONE_HALF, cz - DRONE_HALF,
-                cx + DRONE_HALF, y + DRONE_HALF, cz + DRONE_HALF, 0x30, 0x70, 0xE0); // blue drone body
+    /** Emit the 4 side faces of a pumpkin cube (footprint {@code size}², padded, sitting on {@code y=0}). */
+    private void emitSides(PoseStack.Pose pose, VertexConsumer buf, float x0, float z0, int size, float height,
+                           int r, int g, int b) {
+        float ax = x0 + PUMPKIN_PAD, az = z0 + PUMPKIN_PAD;
+        float bx = x0 + size - PUMPKIN_PAD, bz = z0 + size - PUMPKIN_PAD;
+        float y1 = height;
+        texQuad(pose, buf, ax, 0, az, ax, y1, az, bx, y1, az, bx, 0, az, r, g, b, 0, 0, -1); // north
+        texQuad(pose, buf, bx, 0, bz, bx, y1, bz, ax, y1, bz, ax, 0, bz, r, g, b, 0, 0, 1);  // south
+        texQuad(pose, buf, ax, 0, bz, ax, y1, bz, ax, y1, az, ax, 0, az, r, g, b, -1, 0, 0); // west
+        texQuad(pose, buf, bx, 0, az, bx, y1, az, bx, y1, bz, bx, 0, bz, r, g, b, 1, 0, 0);  // east
     }
 
-    /** Emit an axis-aligned box as 6 color quads (both windings, so it's visible regardless of culling). */
-    private static void cube(PoseStack.Pose pose, VertexConsumer buf,
-                             float x0, float y0, float z0, float x1, float y1, float z1,
-                             int r, int g, int b) {
-        // bottom (y0) and top (y1)
+    /** Emit top (and bottom) faces; UV spans 0..1 over the whole footprint so a merged top stretches. */
+    private void emitTopBottom(PoseStack.Pose pose, VertexConsumer buf, float x0, float z0, int size, float height,
+                               int r, int g, int b) {
+        float ax = x0 + PUMPKIN_PAD, az = z0 + PUMPKIN_PAD;
+        float bx = x0 + size - PUMPKIN_PAD, bz = z0 + size - PUMPKIN_PAD;
+        float y1 = height;
+        texQuad(pose, buf, ax, y1, az, ax, y1, bz, bx, y1, bz, bx, y1, az, r, g, b, 0, 1, 0); // top
+        texQuad(pose, buf, ax, 0, bz, ax, 0, az, bx, 0, az, bx, 0, bz, r, g, b, 0, -1, 0);    // bottom
+    }
+
+    /** One textured quad (full 0..1 UV) for the entity-cutout passes. */
+    private static void texQuad(PoseStack.Pose pose, VertexConsumer buf,
+                                float ax, float ay, float az, float bx, float by, float bz,
+                                float cx, float cy, float cz, float dx, float dy, float dz,
+                                int r, int g, int b, float nx, float ny, float nz) {
+        buf.addVertex(pose, ax, ay, az).setColor(r, g, b, 255).setUv(0, 1).setOverlay(OVERLAY).setLight(LIGHT).setNormal(nx, ny, nz);
+        buf.addVertex(pose, bx, by, bz).setColor(r, g, b, 255).setUv(0, 0).setOverlay(OVERLAY).setLight(LIGHT).setNormal(nx, ny, nz);
+        buf.addVertex(pose, cx, cy, cz).setColor(r, g, b, 255).setUv(1, 0).setOverlay(OVERLAY).setLight(LIGHT).setNormal(nx, ny, nz);
+        buf.addVertex(pose, dx, dy, dz).setColor(r, g, b, 255).setUv(1, 1).setOverlay(OVERLAY).setLight(LIGHT).setNormal(nx, ny, nz);
+    }
+
+    // ---- drone --------------------------------------------------------------------------------
+
+    private void submitDrone(DroneStationRenderState state, PoseStack poseStack, SubmitNodeCollector collector) {
+        float targetX = state.active ? state.fieldOffX + state.droneX + 0.5f : 0.5f;
+        float targetZ = state.active ? state.fieldOffZ + state.droneZ + 0.5f : 0.5f;
+        float[] e = EASED.computeIfAbsent(state.pos, k -> new float[]{targetX, targetZ, 0, 0});
+        float prevX = e[0], prevZ = e[1];
+        e[0] += (targetX - e[0]) * EASE;
+        e[1] += (targetZ - e[1]) * EASE;
+        e[2] = e[0] - prevX; // velocity this frame
+        e[3] = e[1] - prevZ;
+
+        float bob = Mth.sin(state.time * 0.15f) * 0.06f;
+        float spin = state.time * 1.4f; // rotor angle
+        float tiltX = Mth.clamp(e[3] * TILT_PER_SPEED, -TILT_MAX, TILT_MAX);
+        float tiltZ = Mth.clamp(-e[2] * TILT_PER_SPEED, -TILT_MAX, TILT_MAX);
+
+        poseStack.pushPose();
+        poseStack.translate(e[0], DRONE_HOVER + bob, e[1]);
+        poseStack.mulPose(Axis.XP.rotationDegrees(tiltX));
+        poseStack.mulPose(Axis.ZP.rotationDegrees(tiltZ));
+        poseStack.scale(1.3f, 1.3f, 1.3f);
+        collector.submitCustomGeometry(poseStack, RenderTypes.debugQuads(), (pose, buf) -> drawDrone(pose, buf, spin));
+        poseStack.popPose();
+    }
+
+    /** Drone geometry centred at origin: a dark body box + 4 corner rotors with spinning blades. */
+    private void drawDrone(PoseStack.Pose pose, VertexConsumer buf, float spin) {
+        box(pose, buf, -0.16f, -0.05f, -0.16f, 0.16f, 0.05f, 0.16f, 0x33, 0x37, 0x3D); // body
+        box(pose, buf, -0.05f, 0.05f, -0.05f, 0.05f, 0.12f, 0.05f, 0x4A, 0x4F, 0x57);  // hub
+        float[] rx = {-0.22f, -0.22f, 0.22f, 0.22f};
+        float[] rz = {-0.22f, 0.22f, 0.22f, -0.22f};
+        for (int i = 0; i < 4; i++) {
+            box(pose, buf, rx[i] - 0.06f, -0.02f, rz[i] - 0.06f, rx[i] + 0.06f, 0.02f, rz[i] + 0.06f, 0x26, 0x29, 0x2E); // motor
+            blade(pose, buf, rx[i], 0.03f, rz[i], spin);
+            blade(pose, buf, rx[i], 0.03f, rz[i], spin + (float) (Math.PI / 2));
+        }
+    }
+
+    /** A thin flat propeller blade of length 0.18 at height {@code y}, rotating about {@code (cx,cz)}. */
+    private void blade(PoseStack.Pose pose, VertexConsumer buf, float cx, float y, float cz, float angle) {
+        float dx = Mth.cos(angle), dz = Mth.sin(angle);
+        float px = -dz, pz = dx;
+        float len = 0.18f, wid = 0.025f;
+        float ax = cx + dx * len + px * wid, az = cz + dz * len + pz * wid;
+        float bx = cx + dx * len - px * wid, bz = cz + dz * len - pz * wid;
+        float cx2 = cx - dx * len - px * wid, cz2 = cz - dz * len - pz * wid;
+        float dx2 = cx - dx * len + px * wid, dz2 = cz - dz * len + pz * wid;
+        int r = 0xB8, g = 0xBC, b = 0xC2;
+        // top + bottom winding so it's visible from both sides
+        quad(pose, buf, ax, y, az, bx, y, bz, cx2, y, cz2, dx2, y, dz2, r, g, b);
+        quad(pose, buf, dx2, y, dz2, cx2, y, cz2, bx, y, bz, ax, y, az, r, g, b);
+    }
+
+    // ---- colour-only geometry helpers (debugQuads) --------------------------------------------
+
+    /** Axis-aligned colour box, both windings so it shows regardless of culling. */
+    private static void box(PoseStack.Pose pose, VertexConsumer buf,
+                            float x0, float y0, float z0, float x1, float y1, float z1, int r, int g, int b) {
         quad(pose, buf, x0, y0, z0, x1, y0, z0, x1, y0, z1, x0, y0, z1, r, g, b);
         quad(pose, buf, x0, y1, z1, x1, y1, z1, x1, y1, z0, x0, y1, z0, r, g, b);
-        // north (z0) and south (z1)
         quad(pose, buf, x0, y0, z0, x0, y1, z0, x1, y1, z0, x1, y0, z0, r, g, b);
         quad(pose, buf, x1, y0, z1, x1, y1, z1, x0, y1, z1, x0, y0, z1, r, g, b);
-        // west (x0) and east (x1)
         quad(pose, buf, x0, y0, z1, x0, y1, z1, x0, y1, z0, x0, y0, z0, r, g, b);
         quad(pose, buf, x1, y0, z0, x1, y1, z0, x1, y1, z1, x1, y0, z1, r, g, b);
     }
 
-    /** One color quad, emitted in both windings so back-face culling can't hide it. */
     private static void quad(PoseStack.Pose pose, VertexConsumer buf,
                              float ax, float ay, float az, float bx, float by, float bz,
                              float cx, float cy, float cz, float dx, float dy, float dz,
@@ -149,10 +237,6 @@ public class DroneStationRenderer implements BlockEntityRenderer<DroneStationBlo
         buf.addVertex(pose, bx, by, bz).setColor(r, g, b, 255);
         buf.addVertex(pose, cx, cy, cz).setColor(r, g, b, 255);
         buf.addVertex(pose, dx, dy, dz).setColor(r, g, b, 255);
-        buf.addVertex(pose, dx, dy, dz).setColor(r, g, b, 255);
-        buf.addVertex(pose, cx, cy, cz).setColor(r, g, b, 255);
-        buf.addVertex(pose, bx, by, bz).setColor(r, g, b, 255);
-        buf.addVertex(pose, ax, ay, az).setColor(r, g, b, 255);
     }
 
     @Override

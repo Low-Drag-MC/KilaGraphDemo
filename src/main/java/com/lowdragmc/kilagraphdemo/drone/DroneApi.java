@@ -23,7 +23,6 @@ public class DroneApi {
     private static final int MAX_LOG_LINES = 200;
 
     private final FarmSimulation sim;
-    private final int totalTicks;
     private int x;
     private int z;
     private int tick;
@@ -32,11 +31,10 @@ public class DroneApi {
     /** Lines emitted by print nodes this run; surfaced to the UI Log Panel. */
     private final java.util.List<String> logs = new java.util.ArrayList<>();
 
-    public DroneApi(FarmSimulation sim, int startX, int startZ, int totalTicks) {
+    public DroneApi(FarmSimulation sim, int startX, int startZ) {
         this.sim = sim;
         this.x = startX;
         this.z = startZ;
-        this.totalTicks = totalTicks;
     }
 
     /** Fetch the api injected into an executor's evaluation environment, or {@code null} if absent. */
@@ -73,14 +71,6 @@ public class DroneApi {
 
     public int tick() {
         return tick;
-    }
-
-    public int totalTicks() {
-        return totalTicks;
-    }
-
-    public int ticksRemaining() {
-        return Math.max(0, totalTicks - tick);
     }
 
     public void setTick(int tick) {

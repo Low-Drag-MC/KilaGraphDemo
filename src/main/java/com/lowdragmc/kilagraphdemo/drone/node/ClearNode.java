@@ -10,7 +10,7 @@ import com.lowdragmc.lowdraglib2.nodegraphtookit.api.node.NodeAttribute;
 @NodeAttribute(name = "drone.clear", group = "drone", graphTypes = DroneGraph.class)
 public class ClearNode extends DroneActionNode {
 
-    public static final int DURATION = 6;
+    public static final int DURATION = 2;
 
     @OutputPort
     public boolean cleared;

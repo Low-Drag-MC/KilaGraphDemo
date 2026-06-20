@@ -56,6 +56,7 @@ public final class DroneGameTests {
     private static final String FIELD_DETECT = "drone_field_detect";
     private static final String STATION_RUN = "drone_station_run";
     private static final String CHAINED_MOVES = "drone_chained_moves";
+    private static final String CELLS_REUSED = "drone_cells_array_reused";
 
     private DroneGameTests() {
     }
@@ -68,6 +69,7 @@ public final class DroneGameTests {
         registerFunction(FIELD_DETECT, DroneGameTests::fieldDetect);
         registerFunction(STATION_RUN, DroneGameTests::stationRun);
         registerFunction(CHAINED_MOVES, DroneGameTests::chainedMoves);
+        registerFunction(CELLS_REUSED, DroneGameTests::cellsArrayReused);
         TEST_FUNCTIONS.register(eventBus);
         eventBus.addListener(DroneGameTests::registerGameTests);
     }
@@ -98,7 +100,7 @@ public final class DroneGameTests {
     private static int runPlantGrowHarvest() {
         // Small, fast-growing, slow-rotting config so the timing is unambiguous.
         FarmSimulation sim = FarmSimulation.allFertile(1, 1, new FarmConfig(5, 1000, 4));
-        DroneApi api = new DroneApi(sim, 0, 0, 4000);
+        DroneApi api = new DroneApi(sim, 0, 0);
         DroneGraph graph = buildPlantWaitHarvest(60);
 
         DroneRuntime runtime = new DroneRuntime(graph, api, 1234L);
@@ -168,13 +170,47 @@ public final class DroneGameTests {
     }
 
     /**
+     * Regression for the invisible-board bug: the {@code @DescSynced int[] cells} must keep the <em>same</em>
+     * array instance across same-size ticks. LDLib2's array delta only marks the field dirty on in-place
+     * element changes; a fresh array each tick is silently never synced, leaving the client board empty.
+     * {@code captureCells} therefore reuses the array — assert that here via reference identity.
+     */
+    private static void cellsArrayReused(GameTestHelper helper) {
+        helper.setBlock(new BlockPos(0, 1, 0), ModRegistries.FERTILE_SOIL_BLOCK.get());
+        helper.setBlock(new BlockPos(0, 2, 0), ModRegistries.DRONE_STATION_BLOCK.get());
+        BlockPos stationWorld = helper.absolutePos(new BlockPos(0, 2, 0));
+        if (!(helper.getLevel().getBlockEntity(stationWorld) instanceof DroneStationBlockEntity be)) {
+            helper.fail("drone station block entity missing");
+            return;
+        }
+        be.setOwner(java.util.UUID.randomUUID());
+        var provider = helper.getLevel().registryAccess();
+        if (!be.startRun(DroneGraphCodec.toTag(buildPlantWaitHarvest(700), provider))) {
+            helper.fail("startRun returned false (field not detected?)");
+            return;
+        }
+        int[] first = be.getCells();
+        if (first.length == 0) {
+            helper.fail("cells empty after startRun — field not captured");
+            return;
+        }
+        be.tickRun();
+        int[] second = be.getCells();
+        if (first != second) {
+            helper.fail("cells array was reallocated across ticks — @DescSynced delta will never fire");
+            return;
+        }
+        helper.succeed();
+    }
+
+    /**
      * Isolates the runtime's move mechanics from any client sync: over a known 1x5 fertile strip with
      * the drone starting at z=0, an {@code Entry -> Move(SOUTH) x4} program must walk it to z=4. Proves
      * whether chained action nodes each advance the drone (vs. stalling after a couple of cells).
      */
     private static void chainedMoves(GameTestHelper helper) {
         FarmSimulation sim = FarmSimulation.allFertile(1, 5, FarmConfig.DEFAULT);
-        DroneApi api = new DroneApi(sim, 0, 0, 4000);
+        DroneApi api = new DroneApi(sim, 0, 0);
         DroneGraph graph = buildChainedMoves(Direction.SOUTH, 4);
 
         DroneRuntime runtime = new DroneRuntime(graph, api, 1L);
@@ -274,6 +310,7 @@ public final class DroneGameTests {
         registerTest(event, FIELD_DETECT, data);
         registerTest(event, STATION_RUN, data);
         registerTest(event, CHAINED_MOVES, data);
+        registerTest(event, CELLS_REUSED, data);
     }
 
     private static void registerTest(RegisterGameTestsEvent event, String path,
