@@ -20,6 +20,7 @@ import com.lowdragmc.kilagraphdemo.network.C2SSaveDroneProgram;
 import com.lowdragmc.lowdraglib2.gui.ColorPattern;
 import com.lowdragmc.lowdraglib2.gui.factory.BlockUIMenuType;
 import com.lowdragmc.lowdraglib2.gui.sync.bindings.impl.SimpleBinding;
+import com.lowdragmc.lowdraglib2.gui.texture.IGuiTexture;
 import com.lowdragmc.lowdraglib2.gui.ui.ModularUI;
 import com.lowdragmc.lowdraglib2.gui.ui.UI;
 import com.lowdragmc.lowdraglib2.gui.ui.UIElement;
@@ -34,6 +35,7 @@ import com.lowdragmc.lowdraglib2.nodegraphtookit.api.graph.Graph;
 import com.lowdragmc.lowdraglib2.nodegraphtookit.editor.GraphEditorView;
 import com.lowdragmc.lowdraglib2.nodegraphtookit.gui.DockSlot;
 import com.lowdragmc.lowdraglib2.nodegraphtookit.gui.GraphPanel;
+import com.lowdragmc.lowdraglib2.nodegraphtookit.gui.node.NodeElement;
 import com.lowdragmc.lowdraglib2.nodegraphtookit.model.graph.CustomGraphModelImpl;
 import com.lowdragmc.lowdraglib2.nodegraphtookit.model.node.NodeModel;
 import com.mojang.blaze3d.platform.InputConstants;
@@ -43,6 +45,7 @@ import net.minecraft.client.Minecraft;
 import org.lwjgl.glfw.GLFW;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.util.Mth;
 import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.phys.Vec3;
@@ -96,6 +99,13 @@ public final class DroneStationClientUI {
     // true while a run is in progress: capture-phase guards swallow editing input on the editor
     private boolean readOnly;
     private String highlightUid = "";
+    /** The node element whose border we recolor for the running-node highlight (reset when it changes). */
+    @Nullable
+    private NodeElement highlightedNode;
+    /** Frame counter driving the running-node highlight's animated rainbow colour. */
+    private int highlightFrame;
+    /** Countdown to a deferred fit-to-graph after a load (lets the layout settle first); -1 = idle. */
+    private int pendingFit = -1;
 
     // free-fly camera input state
     private boolean looking;
@@ -154,6 +164,10 @@ public final class DroneStationClientUI {
         leftPanel.addChild(editorView);
         installReadOnlyGuard();
         installLogPanel();
+        // Start with the blackboard (TOP_LEFT) and inspector (TOP_RIGHT) panels collapsed to keep the
+        // editor uncluttered; the player can expand them via their title-bar toggles.
+        collapsePanel(DockSlot.TOP_LEFT);
+        collapsePanel(DockSlot.TOP_RIGHT);
 
         // Fly the render camera over the station while the UI is open; restore it when the screen closes
         // (REMOVED fires via ModularUI.onRemoved from Screen.removed()). Also flag this station so the
@@ -304,6 +318,8 @@ public final class DroneStationClientUI {
         editorView.loadGraph(graph, this::onEditorSaved);
         editorView.saveButton.removeSelf();
         markGraphSynced(); // a freshly loaded graph matches the server — not dirty
+        highlightedNode = null; // elements were rebuilt; drop the stale highlight reference
+        pendingFit = 3; // re-fit once the new graph's elements have been laid out (see onTick)
     }
 
     /** Snapshot the current editor graph as the baseline for unsaved-change detection. */
@@ -356,12 +372,29 @@ public final class DroneStationClientUI {
     private void onTick() {
         pollFlyKeys();
         loadProgramOnce();
+        tickPendingFit();
         RunState state = runState();
         boolean running = state == RunState.RUNNING || state == RunState.PAUSED;
         readOnly = running; // read by the capture-phase guards
         applyHighlight(running ? stringSync(sync.currentNode()) : "");
+        animateHighlight();
         logPanel.setLog(stringSync(sync.log()));
         refreshStatus(state);
+    }
+
+    /** Run the deferred fit-to-graph a few ticks after a load, once the node elements have a layout. */
+    private void tickPendingFit() {
+        if (pendingFit > 0 && --pendingFit == 0) {
+            editorView.graphView.fitGraphChildren();
+        }
+    }
+
+    /** Collapse the docked panel in the given corner (blackboard/inspector), keeping its toggle in sync. */
+    private void collapsePanel(DockSlot slot) {
+        GraphPanel panel = editorView.graphView.dockManager.getCornerPanel(slot);
+        if (panel != null && !panel.isCollapsed()) {
+            panel.collapseToggle.setOn(true, true); // notify → GraphPanel.setCollapsed(true)
+        }
     }
 
     /** Load the server-stored program into the editor the first time a non-empty one arrives. */
@@ -377,9 +410,17 @@ public final class DroneStationClientUI {
         highlightUid = "";
     }
 
+    /** Default node selection border (restored when a node stops being the running highlight). */
+    private static final IGuiTexture DEFAULT_FOCUS = ColorPattern.BLUE.borderTexture(1);
+
     /** Select the node currently executing on the server (empty UID clears the selection). */
     private void applyHighlight(String uid) {
         if (uid.equals(highlightUid)) return;
+        // Restore the previously-highlighted node's normal selection border before moving on.
+        if (highlightedNode != null) {
+            highlightedNode.getNodeStyle().focusOverlay(DEFAULT_FOCUS);
+            highlightedNode = null;
+        }
         highlightUid = uid;
         editorView.graphView.clearAllSelected();
         if (uid.isEmpty()) return;
@@ -389,10 +430,29 @@ public final class DroneStationClientUI {
             var model = graph.graphModel.getModel(UUID.fromString(uid));
             if (model != null) {
                 editorView.graphView.addSelected(model);
+                if (editorView.graphView.getModelElement(model) instanceof NodeElement ne) {
+                    highlightedNode = ne; // animateHighlight() will give it the rainbow border
+                }
             }
         } catch (IllegalArgumentException ignored) {
             // malformed UID — nothing to highlight
         }
+    }
+
+    /** Pulse the running node's border through an animated rainbow, a touch wider than normal selection. */
+    private void animateHighlight() {
+        if (highlightedNode == null) return;
+        highlightedNode.getNodeStyle().focusOverlay(
+                ColorPattern.WHITE.borderTexture(2).copy().setColor(rainbow(highlightFrame++)));
+    }
+
+    /** Opaque ARGB rainbow colour cycling with {@code frame} (three phase-shifted sine channels). */
+    private static int rainbow(int frame) {
+        float t = frame * 0.08f;
+        int r = (int) ((Mth.sin(t) * 0.5f + 0.5f) * 255);
+        int g = (int) ((Mth.sin(t + 2.0944f) * 0.5f + 0.5f) * 255);          // +120°
+        int b = (int) ((Mth.sin(t + 4.18879f) * 0.5f + 0.5f) * 255);         // +240°
+        return 0xFF000000 | (r << 16) | (g << 8) | b;
     }
 
     private void refreshStatus(RunState state) {

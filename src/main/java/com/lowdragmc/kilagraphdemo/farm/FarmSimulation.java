@@ -138,15 +138,18 @@ public class FarmSimulation {
     }
 
     /**
-     * Greedily merge filled N x N squares of ripe base pumpkins into single big pumpkins, largest
-     * first (N from {@code maxMergeSize} down to 2). The top-left cell of a square becomes the core
-     * (holding {@code mergeSize = N}); the rest become {@link Stage#MERGED_MEMBER} pointing at it.
+     * Greedily merge filled N x N squares of ripe pumpkins into single big pumpkins, largest first (N from
+     * {@code maxMergeSize} down to 2). A square may be tiled by base pumpkins <em>and/or</em> whole
+     * already-merged blocks, so a smaller block promotes into a bigger one once its neighbours ripen to
+     * complete the square (e.g. a 2x2 + surrounding base pumpkins -> 3x3; four 2x2 -> 4x4). The top-left
+     * cell of a square becomes the core (holding {@code mergeSize = N}); the rest become
+     * {@link Stage#MERGED_MEMBER} pointing at it.
      */
     private void tryMerge() {
         for (int n = Math.min(config.maxMergeSize(), Math.min(width, height)); n >= 2; n--) {
             for (int z0 = 0; z0 + n <= height; z0++) {
                 for (int x0 = 0; x0 + n <= width; x0++) {
-                    if (isBaseRipeSquare(x0, z0, n)) {
+                    if (isRipeSquare(x0, z0, n)) {
                         merge(x0, z0, n);
                     }
                 }
@@ -154,11 +157,24 @@ public class FarmSimulation {
         }
     }
 
-    private boolean isBaseRipeSquare(int x0, int z0, int n) {
+    /**
+     * Whether the {@code n x n} square at {@code (x0, z0)} is fully covered by ripe pumpkins — base
+     * pumpkins or whole already-merged blocks that lie entirely inside the square — so it can be promoted
+     * into a single {@code n x n} pumpkin. Returns false when the square is already exactly one such block
+     * (nothing to do; merging again would keep resetting its rot timer).
+     */
+    private boolean isRipeSquare(int x0, int z0, int n) {
+        int origin = idx(x0, z0);
+        // Already a single n-block here? then there's nothing to merge.
+        if (coreIdx[origin] == -1 && mergeSize[origin] == n && stage[origin] == Stage.RIPE) return false;
         for (int dz = 0; dz < n; dz++) {
             for (int dx = 0; dx < n; dx++) {
-                int i = idx(x0 + dx, z0 + dz);
-                if (stage[i] != Stage.RIPE || mergeSize[i] != 1 || coreIdx[i] != -1) return false;
+                int core = resolveCore(idx(x0 + dx, z0 + dz));
+                if (stage[core] != Stage.RIPE) return false; // empty/growing/rotten cell (or rotting block)
+                // the block this cell belongs to must lie entirely within the candidate square
+                int m = mergeSize[core];
+                int cx = core % width, cz = core / width;
+                if (cx < x0 || cz < z0 || cx + m > x0 + n || cz + m > z0 + n) return false;
             }
         }
         return true;
@@ -173,13 +189,14 @@ public class FarmSimulation {
                 stage[i] = Stage.MERGED_MEMBER;
                 coreIdx[i] = core;
                 age[i] = 0;
+                mergeSize[i] = 1; // clear any stale sub-block size when absorbing a smaller merged block
             }
         }
         mergeSize[core] = n;
         stage[core] = Stage.RIPE;
         age[core] = 0; // big pumpkin resets the rot timer and gets a fresh window scaled by its side length:
         // an N x N pumpkin stays fresh N times as long as a base one (2x2 -> x2 ... up to maxMergeSize).
-        threshold[core] = sampleDuration(config.freshTicks(), config.rotJitter() * n);
+        threshold[core] = sampleDuration(config.freshTicks() * n, config.rotJitter() * n);
     }
 
     /**

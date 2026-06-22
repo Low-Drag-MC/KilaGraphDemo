@@ -69,6 +69,8 @@ public final class DroneGameTests {
     private static final String SCAN_PLANT_COLUMN = "drone_scan_plant_column";
     private static final String GROWTH_RANDOM = "drone_growth_randomness";
     private static final String MERGE_ROT = "drone_merge_rot_longer";
+    private static final String MERGE_PROMOTE_3X3 = "drone_merge_promote_3x3";
+    private static final String MERGE_PROMOTE_4X4 = "drone_merge_promote_4x4";
 
     private DroneGameTests() {
     }
@@ -87,6 +89,8 @@ public final class DroneGameTests {
         registerFunction(SCAN_PLANT_COLUMN, DroneGameTests::scanPlantColumn);
         registerFunction(GROWTH_RANDOM, DroneGameTests::growthRandomness);
         registerFunction(MERGE_ROT, DroneGameTests::mergeRotLonger);
+        registerFunction(MERGE_PROMOTE_3X3, DroneGameTests::mergePromote3x3);
+        registerFunction(MERGE_PROMOTE_4X4, DroneGameTests::mergePromote4x4);
         TEST_FUNCTIONS.register(eventBus);
         eventBus.addListener(DroneGameTests::registerGameTests);
     }
@@ -245,6 +249,60 @@ public final class DroneGameTests {
         sim.tick();
         if (sim.getStage(0, 0) != Stage.ROTTEN) {
             helper.fail("merged 2x2 should rot at fresh*2, stage=" + sim.getStage(0, 0));
+            return;
+        }
+        helper.succeed();
+    }
+
+    /**
+     * An existing merged block must be promoted into a bigger one once its neighbours ripen: a 2x2 plus the
+     * surrounding 5 cells that complete a 3x3 should become a single 3x3. No-jitter config with fresh ≫ grow
+     * so the 2x2 stays fresh while the rest grows.
+     */
+    private static void mergePromote3x3(GameTestHelper helper) {
+        int grow = 3, fresh = 500;
+        FarmSimulation sim = FarmSimulation.allFertile(3, 3, new FarmConfig(grow, fresh, 4)); // jitter 0
+        // Form the 2x2 at (0,0) first.
+        for (int x = 0; x < 2; x++) {
+            for (int z = 0; z < 2; z++) sim.plant(x, z);
+        }
+        for (int t = 0; t < grow; t++) sim.tick();
+        if (sim.getMergeSize(0, 0) != 2) {
+            helper.fail("setup: 2x2 did not merge (mergeSize=" + sim.getMergeSize(0, 0) + ")");
+            return;
+        }
+        // Plant the remaining 5 cells of the 3x3 (the L around the 2x2) and let them ripen.
+        sim.plant(2, 0); sim.plant(2, 1); sim.plant(2, 2); sim.plant(0, 2); sim.plant(1, 2);
+        for (int t = 0; t < grow; t++) sim.tick();
+        if (sim.getMergeSize(0, 0) != 3) {
+            helper.fail("2x2 + ripe neighbours did not promote to 3x3 (mergeSize=" + sim.getMergeSize(0, 0) + ")");
+            return;
+        }
+        helper.succeed();
+    }
+
+    /** Four cells of an existing 2x2 must be absorbed into a 4x4 when the rest of the 4x4 ripens. */
+    private static void mergePromote4x4(GameTestHelper helper) {
+        int grow = 3, fresh = 500;
+        FarmSimulation sim = FarmSimulation.allFertile(4, 4, new FarmConfig(grow, fresh, 4)); // jitter 0
+        for (int x = 0; x < 2; x++) {
+            for (int z = 0; z < 2; z++) sim.plant(x, z);
+        }
+        for (int t = 0; t < grow; t++) sim.tick();
+        if (sim.getMergeSize(0, 0) != 2) {
+            helper.fail("setup: 2x2 did not merge (mergeSize=" + sim.getMergeSize(0, 0) + ")");
+            return;
+        }
+        // Plant the other 12 cells of the 4x4 and let them ripen — the 2x2 should be absorbed into a 4x4.
+        for (int x = 0; x < 4; x++) {
+            for (int z = 0; z < 4; z++) {
+                if (x < 2 && z < 2) continue; // already the 2x2
+                sim.plant(x, z);
+            }
+        }
+        for (int t = 0; t < grow; t++) sim.tick();
+        if (sim.getMergeSize(0, 0) != 4) {
+            helper.fail("2x2 + ripe rest did not promote to 4x4 (mergeSize=" + sim.getMergeSize(0, 0) + ")");
             return;
         }
         helper.succeed();
@@ -556,6 +614,8 @@ public final class DroneGameTests {
         registerTest(event, SCAN_PLANT_COLUMN, data);
         registerTest(event, GROWTH_RANDOM, data);
         registerTest(event, MERGE_ROT, data);
+        registerTest(event, MERGE_PROMOTE_3X3, data);
+        registerTest(event, MERGE_PROMOTE_4X4, data);
     }
 
     private static void registerTest(RegisterGameTestsEvent event, String path,
