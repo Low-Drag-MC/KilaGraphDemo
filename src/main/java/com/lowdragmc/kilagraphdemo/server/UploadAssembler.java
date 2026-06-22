@@ -50,7 +50,13 @@ public final class UploadAssembler {
         WorksSavedData.UploadResult result = data2.upsert(player, packageTag);
         switch (result.status()) {
             case PUBLISHED -> player.sendSystemMessage(Component.literal("Work published."));
-            case UPDATED -> player.sendSystemMessage(Component.literal("Work updated."));
+            case UPDATED -> {
+                player.sendSystemMessage(Component.literal("Work updated."));
+                // Notify other players so any placed hologram/projector showing this work re-pulls it.
+                if (result.meta() != null) {
+                    ModNetworking.broadcastWorkUpdated(player, result.meta().uid(), result.meta().version());
+                }
+            }
             case REJECTED_LIMIT -> player.sendSystemMessage(Component.literal(
                     "Upload limit reached (" + Kilagraphdemo.MAX_WORKS_PER_PLAYER
                             + "). Delete one of your works first."));

@@ -38,9 +38,11 @@ public final class ServerHologramDisplays {
         HologramDisplay cached = CACHE.get(uid);
         if (cached != null) return new Resolved(cached, 1f);
 
-        // Locally available? Build + cache the display.
+        // Locally available and current? Build + cache the display. A locally-cached copy that's older than
+        // the server's latest version (a re-upload happened) is treated as missing, so we fall through and
+        // re-download the fresh payload rather than rendering the stale one.
         var pkg = LocalGraphStore.load(uid);
-        if (pkg.isPresent()) {
+        if (pkg.isPresent() && ClientWorks.serverVersion(uid) <= pkg.get().meta().version()) {
             HologramDisplay display = new HologramDisplay(pkg.get().loadGraph(),
                     pkg.get().model().toContent(), pkg.get().model().renderRadius());
             CACHE.put(uid, display);
@@ -60,6 +62,13 @@ public final class ServerHologramDisplays {
             return new Resolved(null, 0f);
         }
         return new Resolved(null, progress);
+    }
+
+    /** Drop the cached display for {@code uid} (a fresh download/update landed): the next resolve rebuilds it. */
+    public static void onWorkSaved(String uid) {
+        HologramDisplay display = CACHE.remove(uid);
+        if (display != null) display.close();
+        LAST_REQUEST.remove(uid);
     }
 
     /** Drop all cached displays (level unload / disconnect). */

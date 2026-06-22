@@ -35,11 +35,22 @@ public final class ModNetworking {
         }
         registrar.playToClient(S2CWorkList.TYPE, S2CWorkList.CODEC, S2CWorkList::execute);
         registrar.playToClient(S2CWorkDataChunk.TYPE, S2CWorkDataChunk.CODEC, S2CWorkDataChunk::execute);
+        registrar.playToClient(S2CWorkUpdated.TYPE, S2CWorkUpdated.CODEC, S2CWorkUpdated::execute);
     }
 
     /** Send the current work list (as seen by {@code player}) to that player. */
     public static void sendList(ServerPlayer player) {
         WorksSavedData data = WorksSavedData.get((ServerLevel) player.level());
         PacketDistributor.sendToPlayer(player, S2CWorkList.of(data.listEntries(player.getUUID())));
+    }
+
+    /**
+     * Tell every player (except the {@code uploader}, who already gets a fresh {@link #sendList}) that a work
+     * changed. A tiny uid+version notice — clients re-pull the heavy payload lazily, only when they render it.
+     */
+    public static void broadcastWorkUpdated(ServerPlayer uploader, String uid, int version) {
+        for (ServerPlayer p : uploader.level().getServer().getPlayerList().getPlayers()) {
+            if (p != uploader) PacketDistributor.sendToPlayer(p, new S2CWorkUpdated(uid, version));
+        }
     }
 }

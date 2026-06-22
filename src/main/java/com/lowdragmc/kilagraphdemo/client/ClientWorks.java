@@ -2,6 +2,7 @@ package com.lowdragmc.kilagraphdemo.client;
 
 import com.lowdragmc.kilagraphdemo.Kilagraphdemo;
 import com.lowdragmc.kilagraphdemo.client.editor.LocalShaderFunctions;
+import com.lowdragmc.kilagraphdemo.client.render.ServerHologramDisplays;
 import com.lowdragmc.kilagraphdemo.graph.LocalGraphStore;
 import com.lowdragmc.kilagraphdemo.graph.ServerWorkEntry;
 import com.lowdragmc.kilagraphdemo.graph.WorkPackage;
@@ -49,6 +50,9 @@ public final class ClientWorks {
 
     private static List<ServerWorkEntry> serverWorks = List.of();
     private static final Map<String, Chunks.Accumulator> DOWNLOADS = new ConcurrentHashMap<>();
+    /** Latest server-side version we know per work uid (from the work list + update notices). Lets placed
+     *  blocks tell when a locally-cached copy is stale and must be re-pulled. */
+    private static final Map<String, Integer> SERVER_VERSIONS = new ConcurrentHashMap<>();
     @Nullable
     private static Listener listener;
 
@@ -71,6 +75,12 @@ public final class ClientWorks {
     public static float downloadProgress(String uid) {
         Chunks.Accumulator acc = DOWNLOADS.get(uid);
         return acc == null ? -1f : acc.progress();
+    }
+
+    /** The latest server version known for {@code uid}, or -1 if unknown. A locally-cached copy older than
+     *  this has been superseded by a re-upload and should be re-pulled before rendering. */
+    public static int serverVersion(String uid) {
+        return SERVER_VERSIONS.getOrDefault(uid, -1);
     }
 
     // ---- client -> server --------------------------------------------------------------------
@@ -105,7 +115,25 @@ public final class ClientWorks {
 
     public static void onListReceived(List<ServerWorkEntry> entries) {
         serverWorks = entries;
+        for (ServerWorkEntry e : entries) {
+            SERVER_VERSIONS.merge(e.meta().uid(), e.meta().version(), Math::max);
+        }
         runOnClient(() -> notifyUpdated(null));
+    }
+
+    /**
+     * A work was re-uploaded server-side (tiny {@code uid}+{@code version} notice). Record the new version and
+     * drop any placed-block display cached for it, so the next render sees the stale local copy and re-pulls
+     * the fresh payload. We don't download here — the heavy fetch stays lazy, driven by whatever actually
+     * renders the work.
+     */
+    public static void onWorkUpdated(String uid, int version) {
+        SERVER_VERSIONS.merge(uid, version, Math::max);
+        runOnClient(() -> {
+            ServerHologramDisplays.onWorkSaved(uid);
+            com.lowdragmc.kilagraphdemo.slideshow.client.ClientProjectorGraphs.onWorkSaved(uid);
+            notifyUpdated(null);
+        });
     }
 
     public static void onDownloadChunk(String uid, int index, int total, byte[] data) {
@@ -134,6 +162,8 @@ public final class ClientWorks {
                     // Drop any stale compiled SlideShow material for this work so it recompiles from the
                     // freshly-downloaded payload (no-op for hologram works).
                     com.lowdragmc.kilagraphdemo.slideshow.client.ClientProjectorGraphs.onWorkSaved(pkg.meta());
+                    // Likewise drop any stale server-hologram display so it rebuilds from the new payload.
+                    ServerHologramDisplays.onWorkSaved(pkg.meta().uid());
                 } catch (IOException e) {
                     LOGGER.error("[KilaGraphDemo] failed to parse downloaded work {}", uid, e);
                     return;
@@ -159,6 +189,9 @@ public final class ClientWorks {
             try {
                 Files.createDirectories(file.toPath().getParent());
                 Files.write(file.toPath(), bytes);
+                // The bundled path is stable per uid, so Minecraft's TextureManager still holds the old GPU
+                // texture for this Identifier; drop it so the next getTexture() reloads the new bytes.
+                Minecraft.getInstance().getTextureManager().release(id);
             } catch (IOException e) {
                 LOGGER.error("[KilaGraphDemo] failed to write texture {}", location, e);
             }

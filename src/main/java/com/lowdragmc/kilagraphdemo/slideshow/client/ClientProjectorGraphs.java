@@ -73,7 +73,9 @@ public final class ClientProjectorGraphs {
         Compiled compiled = COMPILED.get(uid);
         if (compiled == null) {
             Optional<WorkPackage> loaded = LocalGraphStore.load(uid);
-            if (loaded.isEmpty()) {
+            // Missing, or superseded by a server re-upload — (re-)pull the fresh payload and render vanilla
+            // until it lands rather than compiling the stale local copy.
+            if (loaded.isEmpty() || ClientWorks.serverVersion(uid) > loaded.get().meta().version()) {
                 requestDownload(uid);
                 return null;
             }
@@ -134,13 +136,19 @@ public final class ClientProjectorGraphs {
     /** Called when a work file is (re)written locally (download complete): drop the compiled graph + all its
      *  per-image materials so the next render recompiles from the new payload. */
     public static void onWorkSaved(WorkMeta meta) {
-        COMPILED.remove(meta.uid());
-        Map<GpuTexture, RenderTypeGraphMaterial> perTexture = MATERIALS.remove(meta.uid());
+        onWorkSaved(meta.uid());
+    }
+
+    /** Drop the compiled graph + per-image materials cached for {@code uid} (a download/update landed) so the
+     *  next render recompiles from the new payload. */
+    public static void onWorkSaved(String uid) {
+        COMPILED.remove(uid);
+        Map<GpuTexture, RenderTypeGraphMaterial> perTexture = MATERIALS.remove(uid);
         if (perTexture != null) {
             for (RenderTypeGraphMaterial material : perTexture.values()) {
                 if (material != null) material.close();
             }
         }
-        REQUESTED.remove(meta.uid());
+        REQUESTED.remove(uid);
     }
 }
