@@ -9,6 +9,8 @@ import com.lowdragmc.kilagraphdemo.drone.graph.DroneGraph;
 import com.lowdragmc.kilagraphdemo.farm.FarmSimulation;
 import com.lowdragmc.kilagraphdemo.farm.Stage;
 import com.lowdragmc.lowdraglib2.nodegraphtookit.api.node.NodeAttribute;
+import com.lowdragmc.lowdraglib2.nodegraphtookit.model.node.NodeModel;
+import net.minecraft.network.chat.Component;
 
 /**
  * Inspects a cell relative to the drone ({@code dx, dz} offset). Exposes the most useful predicates
@@ -49,5 +51,11 @@ public class ScanCellNode extends AnnotatedNode {
         ctx.setOutput("ripe", stage == Stage.RIPE);
         ctx.setOutput("rotten", stage == Stage.ROTTEN);
         ctx.setOutput("mergeSize", sim.getMergeSize(cx, cz));
+    }
+
+    @Override
+    public void setImplementation(NodeModel nodeModel) {
+        super.setImplementation(nodeModel);
+        nodeModel.setTooltip(Component.translatable("drone.scan.tooltip"));
     }
 }

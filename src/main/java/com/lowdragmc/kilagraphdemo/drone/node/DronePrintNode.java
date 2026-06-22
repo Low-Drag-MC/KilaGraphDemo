@@ -9,7 +9,9 @@ import com.lowdragmc.kilagraphdemo.drone.graph.DroneGraph;
 import com.lowdragmc.lowdraglib2.nodegraphtookit.api.node.NodeAttribute;
 import com.lowdragmc.lowdraglib2.nodegraphtookit.api.type.TypeHandles;
 import com.lowdragmc.lowdraglib2.nodegraphtookit.api.type.TypeHandles.ExecutionFlow;
+import com.lowdragmc.lowdraglib2.nodegraphtookit.model.node.NodeModel;
 import com.lowdragmc.lowdraglib2.nodegraphtookit.model.node.definition.IPortDefinitionContext;
+import net.minecraft.network.chat.Component;
 
 /**
  * Drone-specific print: appends {@code value} to the run's log (see {@link DroneApi#log}), which is
@@ -37,5 +39,11 @@ public class DronePrintNode extends AnnotatedNode {
             api.log(String.valueOf(v));
         }
         ctx.flow("next");
+    }
+
+    @Override
+    public void setImplementation(NodeModel nodeModel) {
+        super.setImplementation(nodeModel);
+        nodeModel.setTooltip(Component.translatable("drone.print.tooltip"));
     }
 }

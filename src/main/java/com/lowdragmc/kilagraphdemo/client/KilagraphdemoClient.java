@@ -7,13 +7,18 @@ import com.lowdragmc.kilagraphdemo.client.render.HologramDisplays;
 import com.lowdragmc.kilagraphdemo.client.render.HologramPlacements;
 import com.lowdragmc.kilagraphdemo.client.render.ServerHologramDisplays;
 import com.lowdragmc.kilagraphdemo.client.render.WorldCapture;
+import net.minecraft.client.renderer.block.dispatch.BlockStateModelPart;
+import net.minecraft.resources.Identifier;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
+import net.neoforged.neoforge.client.event.ModelEvent;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 import net.neoforged.neoforge.client.event.SubmitCustomGeometryEvent;
+import net.neoforged.neoforge.client.model.standalone.SimpleUnbakedStandaloneModel;
+import net.neoforged.neoforge.client.model.standalone.StandaloneModelKey;
 
 /**
  * Client-side event handling: registers the hologram block entity renderer (mod bus) and drops the
@@ -23,6 +28,16 @@ import net.neoforged.neoforge.client.event.SubmitCustomGeometryEvent;
 @EventBusSubscriber(modid = Kilagraphdemo.MODID, value = Dist.CLIENT)
 public final class KilagraphdemoClient {
     private KilagraphdemoClient() {
+    }
+
+    /** Standalone-baked model for the drone, rendered by {@code DroneStationRenderer} (not bound to any block). */
+    public static final StandaloneModelKey<BlockStateModelPart> DRONE_MODEL =
+            new StandaloneModelKey<>(() -> "kilagraphdemo:drone");
+
+    @SubscribeEvent
+    public static void onRegisterStandalone(ModelEvent.RegisterStandalone event) {
+        event.register(DRONE_MODEL, SimpleUnbakedStandaloneModel.simpleModelWrapper(
+                Identifier.fromNamespaceAndPath(Kilagraphdemo.MODID, "block/drone")));
     }
 
     @SubscribeEvent

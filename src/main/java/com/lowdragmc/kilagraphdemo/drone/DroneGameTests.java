@@ -8,6 +8,7 @@ import com.lowdragmc.kilagraphdemo.drone.graph.DroneGraph;
 import com.lowdragmc.kilagraphdemo.drone.graph.DroneGraphCodec;
 import com.lowdragmc.kilagraphdemo.drone.node.HarvestNode;
 import com.lowdragmc.kilagraphdemo.drone.node.MoveNode;
+import com.lowdragmc.kilagraphdemo.drone.node.MoveToCoordNode;
 import com.lowdragmc.kilagraphdemo.drone.node.PlantNode;
 import com.lowdragmc.kilagraphdemo.drone.node.WaitNode;
 import net.minecraft.core.Direction;
@@ -56,6 +57,7 @@ public final class DroneGameTests {
     private static final String FIELD_DETECT = "drone_field_detect";
     private static final String STATION_RUN = "drone_station_run";
     private static final String CHAINED_MOVES = "drone_chained_moves";
+    private static final String MOVE_TO_COORD = "drone_move_to_coord";
     private static final String CELLS_REUSED = "drone_cells_array_reused";
 
     private DroneGameTests() {
@@ -69,6 +71,7 @@ public final class DroneGameTests {
         registerFunction(FIELD_DETECT, DroneGameTests::fieldDetect);
         registerFunction(STATION_RUN, DroneGameTests::stationRun);
         registerFunction(CHAINED_MOVES, DroneGameTests::chainedMoves);
+        registerFunction(MOVE_TO_COORD, DroneGameTests::moveToCoord);
         registerFunction(CELLS_REUSED, DroneGameTests::cellsArrayReused);
         TEST_FUNCTIONS.register(eventBus);
         eventBus.addListener(DroneGameTests::registerGameTests);
@@ -225,6 +228,46 @@ public final class DroneGameTests {
         helper.succeed();
     }
 
+    /**
+     * {@code MoveToCoord} reaches the target cell directly, and its cost is distance-based: over a 1x5 strip
+     * a single {@code move_to (0,4)} must put the drone at z=4 and occupy ~4 ticks (a flat cost would finish
+     * almost immediately).
+     */
+    private static void moveToCoord(GameTestHelper helper) {
+        FarmSimulation sim = FarmSimulation.allFertile(1, 5, FarmConfig.DEFAULT);
+        DroneApi api = new DroneApi(sim, 0, 0);
+        DroneGraph graph = buildMoveTo(0, 4);
+
+        DroneRuntime runtime = new DroneRuntime(graph, api, 1L);
+        int finishedTick = -1;
+        for (int t = 0; t < 4000 && !runtime.isFinished() && !runtime.isHalted(); t++) {
+            runtime.tick(t);
+            if (runtime.isFinished() && finishedTick < 0) finishedTick = t;
+        }
+        if (api.x() != 0 || api.z() != 4) {
+            helper.fail("expected drone at (0,4) after move_to, got (" + api.x() + "," + api.z() + ")");
+            return;
+        }
+        if (finishedTick < 4) {
+            helper.fail("move_to to a 4-cell-away target finished at tick " + finishedTick
+                    + " — cost is not distance-based");
+            return;
+        }
+        helper.succeed();
+    }
+
+    /** Build {@code Entry -> MoveToCoord(x, z)}. */
+    private static DroneGraph buildMoveTo(int x, int z) {
+        DroneGraph graph = new DroneGraph();
+        CustomGraphModelImpl gm = graph.graphModel;
+        NodeModel entry = gm.createNodeModel(new EntryNode(), new Vector2f(0, 0));
+        NodeModel move = gm.createNodeModel(new MoveToCoordNode(), new Vector2f(100, 0));
+        setConstant(move, "x", x);
+        setConstant(move, "z", z);
+        wireExec(gm, entry, "next", move, "trigger");
+        return graph;
+    }
+
     /** Build {@code Entry -> Move(dir) -> Move(dir) -> ...} with {@code count} chained move nodes. */
     private static DroneGraph buildChainedMoves(Direction dir, int count) {
         DroneGraph graph = new DroneGraph();
@@ -310,6 +353,7 @@ public final class DroneGameTests {
         registerTest(event, FIELD_DETECT, data);
         registerTest(event, STATION_RUN, data);
         registerTest(event, CHAINED_MOVES, data);
+        registerTest(event, MOVE_TO_COORD, data);
         registerTest(event, CELLS_REUSED, data);
     }
 

@@ -2,16 +2,19 @@ package com.lowdragmc.kilagraphdemo.client.drone;
 
 import com.lowdragmc.kilagraphdemo.Kilagraphdemo;
 import com.lowdragmc.kilagraphdemo.block.DroneStationBlockEntity;
+import com.lowdragmc.kilagraphdemo.client.KilagraphdemoClient;
 import com.lowdragmc.kilagraphdemo.farm.Stage;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.math.Axis;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.SubmitNodeCollector;
+import net.minecraft.client.renderer.block.BlockModelRenderState;
+import net.minecraft.client.renderer.block.dispatch.BlockStateModelPart;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderer;
 import net.minecraft.client.renderer.blockentity.BlockEntityRendererProvider;
 import net.minecraft.client.renderer.blockentity.state.BlockEntityRenderState;
 import net.minecraft.client.renderer.feature.ModelFeatureRenderer;
-import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.client.renderer.texture.OverlayTexture;
@@ -47,8 +50,6 @@ public class DroneStationRenderer implements BlockEntityRenderer<DroneStationBlo
     private static final int LIGHT = LightCoordsUtil.FULL_BRIGHT;
     private static final int OVERLAY = OverlayTexture.NO_OVERLAY;
 
-    /** Gap between a pumpkin cube and its cell edge, so neighbours don't touch. */
-    private static final float PUMPKIN_PAD = 0.09f;
     private static final float DRONE_HOVER = 1.4f;
     private static final float EASE = 0.2f;
     /** Degrees of lean per block/tick of horizontal speed, capped so a fast hop doesn't flip the drone. */
@@ -90,11 +91,11 @@ public class DroneStationRenderer implements BlockEntityRenderer<DroneStationBlo
                        CameraRenderState camera) {
         // Pumpkins: two textured passes (side faces, then top/bottom faces) so each pass binds one texture.
         collector.submitCustomGeometry(poseStack, RenderTypes.entityCutout(PUMPKIN_SIDE),
-                (pose, buf) -> forEachPumpkin(state, (x0, z0, size, height, r, g, b) ->
-                        emitSides(pose, buf, x0, z0, size, height, r, g, b)));
+                (pose, buf) -> forEachPumpkin(state, (x0, z0, size, height, inset, r, g, b) ->
+                        emitSides(pose, buf, x0, z0, size, height, inset, r, g, b)));
         collector.submitCustomGeometry(poseStack, RenderTypes.entityCutout(PUMPKIN_TOP),
-                (pose, buf) -> forEachPumpkin(state, (x0, z0, size, height, r, g, b) ->
-                        emitTopBottom(pose, buf, x0, z0, size, height, r, g, b)));
+                (pose, buf) -> forEachPumpkin(state, (x0, z0, size, height, inset, r, g, b) ->
+                        emitTopBottom(pose, buf, x0, z0, size, height, inset, r, g, b)));
 
         submitDrone(state, poseStack, collector);
     }
@@ -103,11 +104,14 @@ public class DroneStationRenderer implements BlockEntityRenderer<DroneStationBlo
 
     @FunctionalInterface
     private interface PumpkinSink {
-        /** {@code (x0,z0)} = field-local NW corner of the footprint; {@code size} cells wide/deep. */
-        void accept(float x0, float z0, int size, float height, int r, int g, int b);
+        /**
+         * {@code (x0,z0)} = field-local NW corner of the footprint; {@code size} cells wide/deep;
+         * {@code inset} = gap from each cell edge (larger = smaller cube).
+         */
+        void accept(float x0, float z0, int size, float height, float inset, int r, int g, int b);
     }
 
-    /** Walk the field grid and feed each visible pumpkin's footprint + colour to {@code sink}. */
+    /** Walk the field grid and feed each visible pumpkin's footprint + size + colour to {@code sink}. */
     private void forEachPumpkin(DroneStationRenderState state, PumpkinSink sink) {
         int w = state.fieldWidth;
         int h = state.fieldHeight;
@@ -119,21 +123,22 @@ public class DroneStationRenderer implements BlockEntityRenderer<DroneStationBlo
                 int merge = Math.max(1, (cell >> 8) & 0xFF);
                 float bx = state.fieldOffX + x;
                 float bz = state.fieldOffZ + z;
+                // Each stage has its own footprint (inset) and height, all sitting flush on y=0.
                 switch (stage) {
-                    case GROWING -> sink.accept(bx, bz, 1, 0.45f, 0x6F, 0xB0, 0x4A);   // small, greenish
-                    case RIPE -> sink.accept(bx, bz, merge, 0.55f * merge, 0xFF, 0xFF, 0xFF); // textured, white tint
-                    case ROTTEN -> sink.accept(bx, bz, 1, 0.5f, 0x5C, 0x8A, 0x32);     // green-tinted = rotten
-                    default -> { }                                                      // EMPTY / MERGED_MEMBER
+                    case GROWING -> sink.accept(bx, bz, 1, 0.32f, 0.30f, 0x6F, 0xB0, 0x4A);     // small green sprout
+                    case RIPE -> sink.accept(bx, bz, merge, 0.55f * merge, 0.09f, 0xFF, 0xFF, 0xFF); // full, textured
+                    case ROTTEN -> sink.accept(bx, bz, 1, 0.45f, 0.18f, 0x5C, 0x8A, 0x32);      // medium, green-tinted
+                    default -> { }                                                               // EMPTY / MERGED_MEMBER
                 }
             }
         }
     }
 
-    /** Emit the 4 side faces of a pumpkin cube (footprint {@code size}², padded, sitting on {@code y=0}). */
+    /** Emit the 4 side faces of a pumpkin cube (footprint {@code size}², inset, sitting on {@code y=0}). */
     private void emitSides(PoseStack.Pose pose, VertexConsumer buf, float x0, float z0, int size, float height,
-                           int r, int g, int b) {
-        float ax = x0 + PUMPKIN_PAD, az = z0 + PUMPKIN_PAD;
-        float bx = x0 + size - PUMPKIN_PAD, bz = z0 + size - PUMPKIN_PAD;
+                           float inset, int r, int g, int b) {
+        float ax = x0 + inset, az = z0 + inset;
+        float bx = x0 + size - inset, bz = z0 + size - inset;
         float y1 = height;
         texQuad(pose, buf, ax, 0, az, ax, y1, az, bx, y1, az, bx, 0, az, r, g, b, 0, 0, -1); // north
         texQuad(pose, buf, bx, 0, bz, bx, y1, bz, ax, y1, bz, ax, 0, bz, r, g, b, 0, 0, 1);  // south
@@ -143,9 +148,9 @@ public class DroneStationRenderer implements BlockEntityRenderer<DroneStationBlo
 
     /** Emit top (and bottom) faces; UV spans 0..1 over the whole footprint so a merged top stretches. */
     private void emitTopBottom(PoseStack.Pose pose, VertexConsumer buf, float x0, float z0, int size, float height,
-                               int r, int g, int b) {
-        float ax = x0 + PUMPKIN_PAD, az = z0 + PUMPKIN_PAD;
-        float bx = x0 + size - PUMPKIN_PAD, bz = z0 + size - PUMPKIN_PAD;
+                               float inset, int r, int g, int b) {
+        float ax = x0 + inset, az = z0 + inset;
+        float bx = x0 + size - inset, bz = z0 + size - inset;
         float y1 = height;
         texQuad(pose, buf, ax, y1, az, ax, y1, bz, bx, y1, bz, bx, y1, az, r, g, b, 0, 1, 0); // top
         texQuad(pose, buf, ax, 0, bz, ax, 0, az, bx, 0, az, bx, 0, bz, r, g, b, 0, -1, 0);    // bottom
@@ -165,6 +170,10 @@ public class DroneStationRenderer implements BlockEntityRenderer<DroneStationBlo
     // ---- drone --------------------------------------------------------------------------------
 
     private void submitDrone(DroneStationRenderState state, PoseStack poseStack, SubmitNodeCollector collector) {
+        BlockStateModelPart part = Minecraft.getInstance().getModelManager()
+                .getStandaloneModel(KilagraphdemoClient.DRONE_MODEL);
+        if (part == null) return; // model not baked yet (e.g. mid resource reload)
+
         float targetX = state.active ? state.fieldOffX + state.droneX + 0.5f : 0.5f;
         float targetZ = state.active ? state.fieldOffZ + state.droneZ + 0.5f : 0.5f;
         float[] e = EASED.computeIfAbsent(state.pos, k -> new float[]{targetX, targetZ, 0, 0});
@@ -184,51 +193,51 @@ public class DroneStationRenderer implements BlockEntityRenderer<DroneStationBlo
         poseStack.mulPose(Axis.XP.rotationDegrees(tiltX));
         poseStack.mulPose(Axis.ZP.rotationDegrees(tiltZ));
         poseStack.scale(1.3f, 1.3f, 1.3f);
-        collector.submitCustomGeometry(poseStack, RenderTypes.debugQuads(), (pose, buf) -> drawDrone(pose, buf, spin));
+        // drone.json is a 0..1 block model centred near (0.5, ~0.47, 0.5); recentre it on the cell so the
+        // pivot above sits at the model's middle (independent of the scale applied just before).
+        poseStack.translate(-0.5f, -0.47f, -0.5f);
+        collector.submitMultiLayerBlockModel(poseStack, java.util.List.of(part), false,
+                BlockModelRenderState.EMPTY_TINTS, LIGHT, OVERLAY, 0);
+        // The model keeps the hollow rotor mounts; fill each with our spinning blades (same 0..1 block
+        // space as the model, so the model-space rotor centres below line up with the mounts).
+        collector.submitCustomGeometry(poseStack, RenderTypes.debugQuads(),
+                (pose, buf) -> drawRotors(pose, buf, spin));
         poseStack.popPose();
     }
 
-    /** Drone geometry centred at origin: a dark body box + 4 corner rotors with spinning blades. */
-    private void drawDrone(PoseStack.Pose pose, VertexConsumer buf, float spin) {
-        box(pose, buf, -0.16f, -0.05f, -0.16f, 0.16f, 0.05f, 0.16f, 0x33, 0x37, 0x3D); // body
-        box(pose, buf, -0.05f, 0.05f, -0.05f, 0.05f, 0.12f, 0.05f, 0x4A, 0x4F, 0x57);  // hub
-        float[] rx = {-0.22f, -0.22f, 0.22f, 0.22f};
-        float[] rz = {-0.22f, 0.22f, 0.22f, -0.22f};
-        for (int i = 0; i < 4; i++) {
-            box(pose, buf, rx[i] - 0.06f, -0.02f, rz[i] - 0.06f, rx[i] + 0.06f, 0.02f, rz[i] + 0.06f, 0x26, 0x29, 0x2E); // motor
-            blade(pose, buf, rx[i], 0.03f, rz[i], spin);
-            blade(pose, buf, rx[i], 0.03f, rz[i], spin + (float) (Math.PI / 2));
+    // ---- rotor blades -------------------------------------------------------------------------
+
+    /** Rotor-mount centres in the model's 0..16 block space (the 4 hollow corner ducts), as 0..1 coords. */
+    private static final float ROTOR_Y = 7.5f / 16f;
+    private static final float[] ROTOR_X = {4.5f / 16f, 11.5f / 16f, 4.5f / 16f, 11.5f / 16f};
+    private static final float[] ROTOR_Z = {4.5f / 16f, 4.5f / 16f, 11.5f / 16f, 11.5f / 16f};
+    /** Blade half-length (radius) + half-width; the radius stays inside each mount's 3×3 inner hole. */
+    private static final float BLADE_LEN = 1.4f / 16f;
+    private static final float BLADE_WID = 0.4f / 16f;
+
+    /** Draw all 4 corner rotors' spinning blades (2 perpendicular blades each → a "+" prop). */
+    private void drawRotors(PoseStack.Pose pose, VertexConsumer buf, float spin) {
+        for (int i = 0; i < ROTOR_X.length; i++) {
+            blade(pose, buf, ROTOR_X[i], ROTOR_Y, ROTOR_Z[i], spin);
+            blade(pose, buf, ROTOR_X[i], ROTOR_Y, ROTOR_Z[i], spin + (float) (Math.PI / 2));
         }
     }
 
-    /** A thin flat propeller blade of length 0.18 at height {@code y}, rotating about {@code (cx,cz)}. */
+    /** A thin flat propeller blade (a full diameter bar) at height {@code y}, rotating about {@code (cx,cz)}. */
     private void blade(PoseStack.Pose pose, VertexConsumer buf, float cx, float y, float cz, float angle) {
         float dx = Mth.cos(angle), dz = Mth.sin(angle);
-        float px = -dz, pz = dx;
-        float len = 0.18f, wid = 0.025f;
-        float ax = cx + dx * len + px * wid, az = cz + dz * len + pz * wid;
-        float bx = cx + dx * len - px * wid, bz = cz + dz * len - pz * wid;
-        float cx2 = cx - dx * len - px * wid, cz2 = cz - dz * len - pz * wid;
-        float dx2 = cx - dx * len + px * wid, dz2 = cz - dz * len + pz * wid;
-        int r = 0xB8, g = 0xBC, b = 0xC2;
+        float px = -dz, pz = dx; // perpendicular (blade width axis)
+        float ax = cx + dx * BLADE_LEN + px * BLADE_WID, az = cz + dz * BLADE_LEN + pz * BLADE_WID;
+        float bx = cx + dx * BLADE_LEN - px * BLADE_WID, bz = cz + dz * BLADE_LEN - pz * BLADE_WID;
+        float cx2 = cx - dx * BLADE_LEN - px * BLADE_WID, cz2 = cz - dz * BLADE_LEN - pz * BLADE_WID;
+        float dx2 = cx - dx * BLADE_LEN + px * BLADE_WID, dz2 = cz - dz * BLADE_LEN + pz * BLADE_WID;
+        int r = 0xB8, g = 0xBC, b = 0xC2; // light grey, like the previous hand-drawn drone
         // top + bottom winding so it's visible from both sides
         quad(pose, buf, ax, y, az, bx, y, bz, cx2, y, cz2, dx2, y, dz2, r, g, b);
         quad(pose, buf, dx2, y, dz2, cx2, y, cz2, bx, y, bz, ax, y, az, r, g, b);
     }
 
-    // ---- colour-only geometry helpers (debugQuads) --------------------------------------------
-
-    /** Axis-aligned colour box, both windings so it shows regardless of culling. */
-    private static void box(PoseStack.Pose pose, VertexConsumer buf,
-                            float x0, float y0, float z0, float x1, float y1, float z1, int r, int g, int b) {
-        quad(pose, buf, x0, y0, z0, x1, y0, z0, x1, y0, z1, x0, y0, z1, r, g, b);
-        quad(pose, buf, x0, y1, z1, x1, y1, z1, x1, y1, z0, x0, y1, z0, r, g, b);
-        quad(pose, buf, x0, y0, z0, x0, y1, z0, x1, y1, z0, x1, y0, z0, r, g, b);
-        quad(pose, buf, x1, y0, z1, x1, y1, z1, x0, y1, z1, x0, y0, z1, r, g, b);
-        quad(pose, buf, x0, y0, z1, x0, y1, z1, x0, y1, z0, x0, y0, z0, r, g, b);
-        quad(pose, buf, x1, y0, z0, x1, y1, z0, x1, y1, z1, x1, y0, z1, r, g, b);
-    }
-
+    /** Colour-only quad (debugQuads pipeline — no texture/light/overlay). */
     private static void quad(PoseStack.Pose pose, VertexConsumer buf,
                              float ax, float ay, float az, float bx, float by, float bz,
                              float cx, float cy, float cz, float dx, float dy, float dz,

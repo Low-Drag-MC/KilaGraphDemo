@@ -20,4 +20,9 @@ public class PlantNode extends DroneActionNode {
         ctx.setOutput("planted", api.plant());
         return DURATION;
     }
+
+    @Override
+    protected int durationTicks() {
+        return DURATION;
+    }
 }

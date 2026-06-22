@@ -23,4 +23,9 @@ public class HarvestNode extends DroneActionNode {
         ctx.setOutput("gained", api.harvest());
         return DURATION;
     }
+
+    @Override
+    protected int durationTicks() {
+        return DURATION;
+    }
 }

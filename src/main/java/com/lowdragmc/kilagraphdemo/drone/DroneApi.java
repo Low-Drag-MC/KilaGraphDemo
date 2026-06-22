@@ -101,6 +101,14 @@ public class DroneApi {
         return true;
     }
 
+    /** Fly straight to cell {@code (nx, nz)}; fails (drone stays) if the target is outside the field box. */
+    public boolean moveTo(int nx, int nz) {
+        if (nx < 0 || nx >= sim.getWidth() || nz < 0 || nz >= sim.getHeight()) return false;
+        x = nx;
+        z = nz;
+        return true;
+    }
+
     public boolean plant() {
         return sim.plant(x, z);
     }

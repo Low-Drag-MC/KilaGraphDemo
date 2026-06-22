@@ -21,7 +21,6 @@ import com.lowdragmc.lowdraglib2.gui.sync.bindings.impl.SimpleBinding;
 import com.lowdragmc.lowdraglib2.gui.ui.ModularUI;
 import com.lowdragmc.lowdraglib2.gui.ui.UI;
 import com.lowdragmc.lowdraglib2.gui.ui.UIElement;
-import com.lowdragmc.lowdraglib2.gui.ui.data.Horizontal;
 import com.lowdragmc.lowdraglib2.gui.ui.data.Vertical;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Button;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Label;
@@ -92,11 +91,6 @@ public final class DroneStationClientUI {
     private static final double FLY_SPEED = 0.45;
     private static final float LOOK_SENSITIVITY = 0.15f;
     private static final double ZOOM_STEP = 1.0;
-    /**
-     * Horizontal offset of the top-down camera so the farm frames into the screen's right half (the left
-     * half is the editor). Camera shifts in -X so the farm's image moves +X (right); flip if it's wrong.
-     */
-    private static final double VIEW_SHIFT_X = 8;
 
     private DroneStationClientUI(BlockPos stationPos, boolean owner, DroneMenuSync.Bindings sync) {
         this.stationPos = stationPos;
@@ -161,8 +155,8 @@ public final class DroneStationClientUI {
      */
     private void activateCamera() {
         Vec3 center = Vec3.atCenterOf(stationPos);
-        Vec3 camPos = center.add(VIEW_SHIFT_X, 24, 0); // straight above; X-shift frames it into the right half
-        CameraOverrideManager.INSTANCE.activate(camPos, 0f, 90f, center, FLY_RADIUS); // pitch 90 = straight down
+        Vec3 camPos = center.add(10, 10, -3); // straight above; X-shift frames it into the right half
+        CameraOverrideManager.INSTANCE.activate(camPos, 30f, 55f, center, FLY_RADIUS); // pitch 90 = straight down
     }
 
     /**

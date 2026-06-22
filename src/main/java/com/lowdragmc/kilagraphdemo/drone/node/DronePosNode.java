@@ -6,6 +6,8 @@ import com.lowdragmc.kilagraph.graph.exec.EvalContext;
 import com.lowdragmc.kilagraphdemo.drone.DroneApi;
 import com.lowdragmc.kilagraphdemo.drone.graph.DroneGraph;
 import com.lowdragmc.lowdraglib2.nodegraphtookit.api.node.NodeAttribute;
+import com.lowdragmc.lowdraglib2.nodegraphtookit.model.node.NodeModel;
+import net.minecraft.network.chat.Component;
 
 /** Reports the drone's current cell coordinates on the field. */
 @NodeAttribute(name = "drone.pos", group = "drone", graphTypes = DroneGraph.class)
@@ -21,5 +23,11 @@ public class DronePosNode extends AnnotatedNode {
         DroneApi api = DroneApi.from(ctx.getExecutor());
         ctx.setOutput("x", api != null ? api.x() : 0);
         ctx.setOutput("z", api != null ? api.z() : 0);
+    }
+
+    @Override
+    public void setImplementation(NodeModel nodeModel) {
+        super.setImplementation(nodeModel);
+        nodeModel.setTooltip(Component.translatable("drone.pos.tooltip"));
     }
 }

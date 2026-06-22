@@ -20,4 +20,9 @@ public class ClearNode extends DroneActionNode {
         ctx.setOutput("cleared", api.clear());
         return DURATION;
     }
+
+    @Override
+    protected int durationTicks() {
+        return DURATION;
+    }
 }
