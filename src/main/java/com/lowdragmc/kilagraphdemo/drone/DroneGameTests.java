@@ -68,6 +68,7 @@ public final class DroneGameTests {
     private static final String SUBMIT_REMOVE = "drone_submit_remove";
     private static final String SCAN_PLANT_COLUMN = "drone_scan_plant_column";
     private static final String GROWTH_RANDOM = "drone_growth_randomness";
+    private static final String MERGE_ROT = "drone_merge_rot_longer";
 
     private DroneGameTests() {
     }
@@ -85,6 +86,7 @@ public final class DroneGameTests {
         registerFunction(SUBMIT_REMOVE, DroneGameTests::submitRemove);
         registerFunction(SCAN_PLANT_COLUMN, DroneGameTests::scanPlantColumn);
         registerFunction(GROWTH_RANDOM, DroneGameTests::growthRandomness);
+        registerFunction(MERGE_ROT, DroneGameTests::mergeRotLonger);
         TEST_FUNCTIONS.register(eventBus);
         eventBus.addListener(DroneGameTests::registerGameTests);
     }
@@ -215,6 +217,35 @@ public final class DroneGameTests {
                 helper.fail("grow time " + t + " outside expected range [" + lo + ", " + hi + "]");
                 return;
             }
+        }
+        helper.succeed();
+    }
+
+    /**
+     * Merging into a big pumpkin resets the rot timer and stretches the fresh window by the side length:
+     * a 2x2 stays fresh {@code freshTicks * 2} ticks. Uses a no-jitter config for exact timing.
+     */
+    private static void mergeRotLonger(GameTestHelper helper) {
+        int grow = 5, fresh = 10;
+        FarmSimulation sim = FarmSimulation.allFertile(2, 2, new FarmConfig(grow, fresh, 4)); // jitter 0
+        for (int x = 0; x < 2; x++) {
+            for (int z = 0; z < 2; z++) sim.plant(x, z);
+        }
+        for (int t = 0; t < grow; t++) sim.tick(); // ripen all four; they merge the same tick
+        if (sim.getMergeSize(0, 0) != 2) {
+            helper.fail("2x2 did not merge (core mergeSize=" + sim.getMergeSize(0, 0) + ")");
+            return;
+        }
+        // Fresh window is fresh*2 = 20: still RIPE after 19 ticks, ROTTEN on the 20th.
+        for (int t = 0; t < fresh * 2 - 1; t++) sim.tick();
+        if (sim.getStage(0, 0) != Stage.RIPE) {
+            helper.fail("merged 2x2 rotted too early — expected fresh*2 window, stage=" + sim.getStage(0, 0));
+            return;
+        }
+        sim.tick();
+        if (sim.getStage(0, 0) != Stage.ROTTEN) {
+            helper.fail("merged 2x2 should rot at fresh*2, stage=" + sim.getStage(0, 0));
+            return;
         }
         helper.succeed();
     }
@@ -524,6 +555,7 @@ public final class DroneGameTests {
         registerTest(event, SUBMIT_REMOVE, data);
         registerTest(event, SCAN_PLANT_COLUMN, data);
         registerTest(event, GROWTH_RANDOM, data);
+        registerTest(event, MERGE_ROT, data);
     }
 
     private static void registerTest(RegisterGameTestsEvent event, String path,

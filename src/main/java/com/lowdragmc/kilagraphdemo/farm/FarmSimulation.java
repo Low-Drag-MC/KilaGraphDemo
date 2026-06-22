@@ -177,8 +177,9 @@ public class FarmSimulation {
         }
         mergeSize[core] = n;
         stage[core] = Stage.RIPE;
-        age[core] = 0; // big pumpkin starts its own fresh window
-        threshold[core] = sampleDuration(config.freshTicks(), config.rotJitter());
+        age[core] = 0; // big pumpkin resets the rot timer and gets a fresh window scaled by its side length:
+        // an N x N pumpkin stays fresh N times as long as a base one (2x2 -> x2 ... up to maxMergeSize).
+        threshold[core] = sampleDuration(config.freshTicks(), config.rotJitter() * n);
     }
 
     /**
