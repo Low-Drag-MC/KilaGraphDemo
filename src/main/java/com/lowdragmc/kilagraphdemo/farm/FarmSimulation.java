@@ -17,21 +17,27 @@ public class FarmSimulation {
     private final Stage[] stage;
     /** Ticks elapsed in the current stage (growing toward ripe, or fresh-since-ripe). */
     private final int[] age;
+    /** Randomized target duration for the current stage of each cell (grow time, then fresh time). */
+    private final int[] threshold;
     /** 1 for a base pumpkin; N for the core cell of an N x N merged pumpkin. */
     private final int[] mergeSize;
     /** -1 when not part of a merged pumpkin; otherwise the index of that pumpkin's core cell. */
     private final int[] coreIdx;
+    /** Seeded RNG for per-pumpkin grow/rot jitter — fixed seed keeps a program's score reproducible. */
+    private final java.util.Random random;
     private int score;
 
-    private FarmSimulation(int width, int height, FarmConfig config, boolean[] fertile) {
+    private FarmSimulation(int width, int height, FarmConfig config, boolean[] fertile, long seed) {
         this.width = width;
         this.height = height;
         this.config = config;
         this.fertile = fertile;
         this.stage = new Stage[width * height];
         this.age = new int[width * height];
+        this.threshold = new int[width * height];
         this.mergeSize = new int[width * height];
         this.coreIdx = new int[width * height];
+        this.random = new java.util.Random(seed);
         java.util.Arrays.fill(this.stage, Stage.EMPTY);
         java.util.Arrays.fill(this.mergeSize, 1);
         java.util.Arrays.fill(this.coreIdx, -1);
@@ -39,9 +45,14 @@ public class FarmSimulation {
 
     /** A simulation whose every cell is fertile (handy for tests and rectangular fields). */
     public static FarmSimulation allFertile(int width, int height, FarmConfig config) {
+        return allFertile(width, height, config, 0L);
+    }
+
+    /** As {@link #allFertile(int, int, FarmConfig)} but with an explicit seed for the grow/rot jitter. */
+    public static FarmSimulation allFertile(int width, int height, FarmConfig config, long seed) {
         boolean[] fertile = new boolean[width * height];
         java.util.Arrays.fill(fertile, true);
-        return new FarmSimulation(width, height, config, fertile);
+        return new FarmSimulation(width, height, config, fertile, seed);
     }
 
     /**
@@ -49,11 +60,29 @@ public class FarmSimulation {
      * plantable. The mask is copied. Used by the real field, detected by flood-filling fertile soil.
      */
     public static FarmSimulation of(int width, int height, boolean[] fertile, FarmConfig config) {
+        return of(width, height, fertile, config, 0L);
+    }
+
+    /** As {@link #of(int, int, boolean[], FarmConfig)} but with an explicit seed for the grow/rot jitter. */
+    public static FarmSimulation of(int width, int height, boolean[] fertile, FarmConfig config, long seed) {
         if (fertile.length != width * height) {
             throw new IllegalArgumentException("fertile mask length " + fertile.length
                     + " != " + width + "x" + height);
         }
-        return new FarmSimulation(width, height, config, fertile.clone());
+        return new FarmSimulation(width, height, config, fertile.clone(), seed);
+    }
+
+    /**
+     * Draw a stage duration from a Gaussian centred on {@code mean} with standard deviation {@code jitter},
+     * clamped to {@code [max(1, mean-2σ), mean+2σ]} so it stays positive and in a sensible range. With
+     * {@code jitter <= 0} this is just {@code mean} (deterministic, for tests).
+     */
+    private int sampleDuration(int mean, int jitter) {
+        if (jitter <= 0) return Math.max(1, mean);
+        double v = mean + random.nextGaussian() * jitter;
+        int lo = Math.max(1, mean - 2 * jitter);
+        int hi = mean + 2 * jitter;
+        return (int) Math.round(Math.max(lo, Math.min(hi, v)));
     }
 
     /** Field width in cells. */
@@ -82,8 +111,10 @@ public class FarmSimulation {
     /** Plant a seed on an empty fertile cell. Returns whether anything was planted. */
     public boolean plant(int x, int z) {
         if (!isFertile(x, z) || stage[idx(x, z)] != Stage.EMPTY) return false;
-        stage[idx(x, z)] = Stage.GROWING;
-        age[idx(x, z)] = 0;
+        int i = idx(x, z);
+        stage[i] = Stage.GROWING;
+        age[i] = 0;
+        threshold[i] = sampleDuration(config.growTicks(), config.growJitter()); // this pumpkin's grow time
         return true;
     }
 
@@ -91,12 +122,13 @@ public class FarmSimulation {
     public void tick() {
         for (int i = 0; i < stage.length; i++) {
             if (stage[i] == Stage.GROWING) {
-                if (++age[i] >= config.growTicks()) {
+                if (++age[i] >= threshold[i]) {
                     stage[i] = Stage.RIPE;
                     age[i] = 0;
+                    threshold[i] = sampleDuration(config.freshTicks(), config.rotJitter()); // fresh window
                 }
             } else if (stage[i] == Stage.RIPE) {
-                if (++age[i] >= config.freshTicks()) {
+                if (++age[i] >= threshold[i]) {
                     stage[i] = Stage.ROTTEN;
                     age[i] = 0;
                 }
@@ -146,6 +178,7 @@ public class FarmSimulation {
         mergeSize[core] = n;
         stage[core] = Stage.RIPE;
         age[core] = 0; // big pumpkin starts its own fresh window
+        threshold[core] = sampleDuration(config.freshTicks(), config.rotJitter());
     }
 
     /**

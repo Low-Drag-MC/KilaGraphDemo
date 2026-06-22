@@ -3,11 +3,15 @@ package com.lowdragmc.kilagraphdemo.client.drone;
 import com.lowdragmc.kilagraphdemo.Kilagraphdemo;
 import com.lowdragmc.kilagraphdemo.block.DroneStationBlockEntity;
 import com.lowdragmc.kilagraphdemo.client.KilagraphdemoClient;
+import com.lowdragmc.kilagraphdemo.drone.DroneField;
+import com.lowdragmc.kilagraphdemo.drone.node.MoveNode;
 import com.lowdragmc.kilagraphdemo.farm.Stage;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.math.Axis;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
+import net.minecraft.network.chat.Component;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.block.BlockModelRenderState;
 import net.minecraft.client.renderer.block.dispatch.BlockStateModelPart;
@@ -51,12 +55,17 @@ public class DroneStationRenderer implements BlockEntityRenderer<DroneStationBlo
     private static final int OVERLAY = OverlayTexture.NO_OVERLAY;
 
     private static final float DRONE_HOVER = 1.4f;
-    private static final float EASE = 0.2f;
+    /**
+     * Visual travel speed in cells per tick — one cell per {@link MoveNode#DURATION} ticks, matching a
+     * single Move's action cost. Constant speed (not an exponential ease) so a long {@code MoveToCoord}
+     * hop animates proportionally longer than a 1-cell Move instead of snapping.
+     */
+    private static final float SPEED_PER_TICK = 1f / MoveNode.DURATION;
     /** Degrees of lean per block/tick of horizontal speed, capped so a fast hop doesn't flip the drone. */
     private static final float TILT_PER_SPEED = 320f;
     private static final float TILT_MAX = 32f;
 
-    /** Per-station eased drone state {@code {curX, curZ, velX, velZ}} for smooth motion + lean. */
+    /** Per-station drone motion state {@code {curX, curZ, velX, velZ, lastTime}} for smooth motion + lean. */
     private static final Map<BlockPos, float[]> EASED = new HashMap<>();
 
     public DroneStationRenderer(BlockEntityRendererProvider.Context context) {
@@ -82,6 +91,7 @@ public class DroneStationRenderer implements BlockEntityRenderer<DroneStationBlo
         // Visibility keys off the field geometry (a plain synced int), not the cells array: an array
         // shrinking back to empty on reset is not a reliable @DescSynced delta.
         state.active = be.getFieldWidth() > 0;
+        state.showCoords = be.getBlockPos().equals(DroneStationClientUI.openStation);
         Level level = be.getLevel();
         state.time = level == null ? 0f : (level.getGameTime() + partialTicks);
     }
@@ -98,6 +108,50 @@ public class DroneStationRenderer implements BlockEntityRenderer<DroneStationBlo
                         emitTopBottom(pose, buf, x0, z0, size, height, inset, r, g, b)));
 
         submitDrone(state, poseStack, collector);
+
+        if (state.showCoords) {
+            submitCoordLabels(poseStack, collector);
+        }
+    }
+
+    // ---- coordinate labels (shown while the station's menu is open) ----------------------------
+
+    /** Glyphs are ~9px tall; this scales a number to roughly half a block. */
+    private static final float LABEL_SCALE = 1f / 16f;
+
+    /**
+     * Draw {@code 0..N-1} index labels flush on the ground along all four edges of the fixed field, so the
+     * player has an (x,z) coordinate reference in the world view while programming. Labels ignore depth
+     * ({@link Font.DisplayMode#SEE_THROUGH}) so they read through the pumpkins. Uses the fixed
+     * {@link DroneField} geometry (not the synced run state) so they show even before a run starts.
+     *
+     * <p>The text is laid flat facing up; if it ends up upside-down for your camera, flip the sign of the
+     * {@link Axis#XP} rotation in {@link #label}.</p>
+     */
+    private void submitCoordLabels(PoseStack poseStack, SubmitNodeCollector collector) {
+        int w = DroneField.WIDTH, h = DroneField.HEIGHT;
+        int ox = DroneField.OFFSET_X, oz = DroneField.OFFSET_Z;
+        for (int x = 0; x < w; x++) {
+            label(poseStack, collector, ox + x + 0.5f, oz - 0.5f, Integer.toString(x));       // north edge
+            label(poseStack, collector, ox + x + 0.5f, oz + h + 0.5f, Integer.toString(x));   // south edge
+        }
+        for (int z = 0; z < h; z++) {
+            label(poseStack, collector, ox - 0.5f, oz + z + 0.5f, Integer.toString(z));       // west edge
+            label(poseStack, collector, ox + w + 0.5f, oz + z + 0.5f, Integer.toString(z));   // east edge
+        }
+    }
+
+    /** Draw one number centred on the ground at local cell-space {@code (lx, lz)}, lying flat, facing up. */
+    private void label(PoseStack poseStack, SubmitNodeCollector collector, float lx, float lz, String text) {
+        Font font = Minecraft.getInstance().font;
+        poseStack.pushPose();
+        poseStack.translate(lx, 0.02f, lz);                 // a hair above the ground
+        poseStack.mulPose(Axis.XP.rotationDegrees(90));    // lay the XY text flat on the ground, facing up
+        poseStack.scale(LABEL_SCALE, LABEL_SCALE, LABEL_SCALE);
+        poseStack.translate(-font.width(text) / 2f, -font.lineHeight / 2f, 0); // centre on the cell
+        collector.submitText(poseStack, 0, 0, Component.literal(text).getVisualOrderText(),
+                false, Font.DisplayMode.SEE_THROUGH, LIGHT, 0xFFFFFFFF, 0, 0);
+        poseStack.popPose();
     }
 
     // ---- pumpkins -----------------------------------------------------------------------------
@@ -125,7 +179,7 @@ public class DroneStationRenderer implements BlockEntityRenderer<DroneStationBlo
                 float bz = state.fieldOffZ + z;
                 // Each stage has its own footprint (inset) and height, all sitting flush on y=0.
                 switch (stage) {
-                    case GROWING -> sink.accept(bx, bz, 1, 0.32f, 0.30f, 0x6F, 0xB0, 0x4A);     // small green sprout
+                    case GROWING -> sink.accept(bx, bz, 1, 0.32f, 0.30f, 0xFF, 0xB0, 0xFF);     // small green sprout
                     case RIPE -> sink.accept(bx, bz, merge, 0.55f * merge, 0.09f, 0xFF, 0xFF, 0xFF); // full, textured
                     case ROTTEN -> sink.accept(bx, bz, 1, 0.45f, 0.18f, 0x5C, 0x8A, 0x32);      // medium, green-tinted
                     default -> { }                                                               // EMPTY / MERGED_MEMBER
@@ -176,11 +230,23 @@ public class DroneStationRenderer implements BlockEntityRenderer<DroneStationBlo
 
         float targetX = state.active ? state.fieldOffX + state.droneX + 0.5f : 0.5f;
         float targetZ = state.active ? state.fieldOffZ + state.droneZ + 0.5f : 0.5f;
-        float[] e = EASED.computeIfAbsent(state.pos, k -> new float[]{targetX, targetZ, 0, 0});
+        float[] e = EASED.computeIfAbsent(state.pos, k -> new float[]{targetX, targetZ, 0, 0, state.time});
+        // Constant-speed approach: move toward the target by at most SPEED_PER_TICK * elapsed-ticks, so
+        // travel time scales with distance (an 8-cell MoveToCoord takes 8x a 1-cell Move).
+        float dt = Math.max(0f, state.time - e[4]);
+        e[4] = state.time;
+        float maxStep = SPEED_PER_TICK * dt;
         float prevX = e[0], prevZ = e[1];
-        e[0] += (targetX - e[0]) * EASE;
-        e[1] += (targetZ - e[1]) * EASE;
-        e[2] = e[0] - prevX; // velocity this frame
+        float ddx = targetX - e[0], ddz = targetZ - e[1];
+        float dist = Mth.sqrt(ddx * ddx + ddz * ddz);
+        if (dist <= maxStep || dist < 1e-4f) {
+            e[0] = targetX;
+            e[1] = targetZ;
+        } else {
+            e[0] += ddx / dist * maxStep;
+            e[1] += ddz / dist * maxStep;
+        }
+        e[2] = e[0] - prevX; // velocity this frame (drives the lean)
         e[3] = e[1] - prevZ;
 
         float bob = Mth.sin(state.time * 0.15f) * 0.06f;
@@ -250,13 +316,13 @@ public class DroneStationRenderer implements BlockEntityRenderer<DroneStationBlo
 
     @Override
     public AABB getRenderBoundingBox(DroneStationBlockEntity be) {
+        // The field is fixed, so always cover it (+ a 1-cell margin for the edge coordinate labels and the
+        // hovering drone) regardless of run state, so the board/labels are never culled while in view.
         BlockPos p = be.getBlockPos();
-        int w = be.getFieldWidth();
-        int h = be.getFieldHeight();
-        AABB block = new AABB(p);
-        if (w <= 0 || h <= 0) return block.inflate(1);
-        double minX = p.getX() + be.getFieldOffX();
-        double minZ = p.getZ() + be.getFieldOffZ();
-        return new AABB(minX, p.getY() - 1, minZ, minX + w, p.getY() + 3, minZ + h).minmax(block);
+        double minX = p.getX() + DroneField.OFFSET_X - 1;
+        double minZ = p.getZ() + DroneField.OFFSET_Z - 1;
+        double maxX = p.getX() + DroneField.OFFSET_X + DroneField.WIDTH + 1;
+        double maxZ = p.getZ() + DroneField.OFFSET_Z + DroneField.HEIGHT + 1;
+        return new AABB(minX, p.getY() - 1, minZ, maxX, p.getY() + 3, maxZ).minmax(new AABB(p));
     }
 }

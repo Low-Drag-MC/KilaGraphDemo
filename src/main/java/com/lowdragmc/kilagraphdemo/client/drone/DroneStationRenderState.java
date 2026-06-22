@@ -20,6 +20,8 @@ public class DroneStationRenderState extends BlockEntityRenderState {
     public int droneZ;
     /** Whether a run is active (field populated) — drives whether the drone flies the field or parks. */
     public boolean active;
+    /** Whether this station's menu is open on the client — draws the field's 0..N coordinate labels. */
+    public boolean showCoords;
     /** Smooth time (game time + partial tick) for the drone's hover bob. */
     public float time;
 }

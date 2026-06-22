@@ -7,7 +7,9 @@
   ],
   "client": [
     "CameraMixin",
-    "CloudRenderMixin"
+    "CloudRenderMixin",
+    "HandRenderMixin",
+    "HotbarHudMixin"
   ],
   "injectors": {
     "defaultRequire": 1

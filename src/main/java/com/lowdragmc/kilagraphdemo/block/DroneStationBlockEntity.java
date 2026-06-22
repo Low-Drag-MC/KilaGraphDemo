@@ -3,12 +3,14 @@ package com.lowdragmc.kilagraphdemo.block;
 import com.lowdragmc.kilagraphdemo.ModRegistries;
 import com.lowdragmc.kilagraphdemo.drone.DroneApi;
 import com.lowdragmc.kilagraphdemo.drone.DroneRuntime;
-import com.lowdragmc.kilagraphdemo.drone.FieldDetector;
+import com.lowdragmc.kilagraphdemo.drone.DroneField;
+import com.lowdragmc.kilagraphdemo.drone.DroneScoring;
 import com.lowdragmc.kilagraphdemo.drone.graph.DroneGraph;
 import com.lowdragmc.kilagraphdemo.drone.graph.DroneGraphCodec;
 import com.lowdragmc.kilagraphdemo.farm.FarmConfig;
 import com.lowdragmc.kilagraphdemo.farm.FarmSimulation;
 import com.lowdragmc.kilagraphdemo.farm.RunState;
+import com.lowdragmc.kilagraphdemo.server.DroneLeaderboard;
 import com.lowdragmc.lowdraglib2.syncdata.annotation.DescSynced;
 import com.lowdragmc.lowdraglib2.syncdata.annotation.Persisted;
 import com.lowdragmc.lowdraglib2.syncdata.holder.blockentity.ISyncPersistRPCBlockEntity;
@@ -17,8 +19,10 @@ import lombok.Getter;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.UUID;
@@ -42,13 +46,12 @@ import java.util.UUID;
  * explicitly at state changes and each run tick, so only changed fields go out and only when they change.</p>
  */
 public class DroneStationBlockEntity extends BlockEntity implements ISyncPersistRPCBlockEntity {
-
-    /** A run lasts this many ticks before it is scored and finishes (~3 minutes). */
-    public static final int TOTAL_TICKS = 3600;
     /** Fixed RNG seed: every run faces identical conditions, keeping the leaderboard fair. */
     public static final long RUN_SEED = 0L;
     /** Auto-abort a paused run (or an offline owner's run) after this many ticks. */
-    public static final int MAX_PAUSE_TICKS = 20 * 60 * 5; // 5 minutes
+    public static final int MAX_PAUSE_TICKS = 20 * 60 * 10; // 5 minutes
+    /** Owner this many blocks (or more) from the station auto-submits + frees the field for the next player. */
+    public static final double SUBMIT_DISTANCE = 30.0;
 
     @Getter
     private final FieldManagedStorage syncStorage = new FieldManagedStorage(this);
@@ -91,6 +94,10 @@ public class DroneStationBlockEntity extends BlockEntity implements ISyncPersist
     private int pauseTicks;
     /** Newline-joined run log mirrored from the runtime each tick; streamed to menu-open players. */
     private String logText = "";
+    /** Set once the solution has been submitted; the block is being removed, so don't submit twice. */
+    private boolean submitted;
+    /** Last redstone power state, for rising-edge ("button press") detection in {@link #onRedstone}. */
+    private boolean lastPowered;
 
     public DroneStationBlockEntity(BlockPos pos, BlockState state) {
         super(ModRegistries.DRONE_STATION_BE.get(), pos, state);
@@ -184,9 +191,9 @@ public class DroneStationBlockEntity extends BlockEntity implements ISyncPersist
     // ---- run control (server-side; callers must already have checked ownership) ----------------
 
     /**
-     * Begin a run of {@code programTag} over the field beneath this station. Returns whether it started
-     * (it won't if there is no fertile field below). Stores the program, resets the field, builds a
-     * fresh deterministic runtime and starts running.
+     * Begin a run of {@code programTag} on this station's fixed play field. Always succeeds (the field is a
+     * fixed {@link DroneField} grid, not tied to any blocks below). Stores the program, resets the field,
+     * builds a fresh deterministic runtime and starts running.
      */
     public boolean startRun(CompoundTag programTag) {
         return startRun(programTag, false);
@@ -194,29 +201,28 @@ public class DroneStationBlockEntity extends BlockEntity implements ISyncPersist
 
     /**
      * Begin a run; {@code startPaused} starts it in {@link RunState#PAUSED} (used by single-step from idle).
+     * The scenario matches {@link DroneScoring} exactly so the preview is what gets scored: a fixed
+     * {@link DroneField#WIDTH}x{@link DroneField#HEIGHT} field with the drone starting on the station,
+     * <em>outside</em> the field at {@code (START_X, START_Z)}.
      */
     public boolean startRun(CompoundTag programTag, boolean startPaused) {
         if (!(level instanceof ServerLevel serverLevel)) return false;
-        FieldDetector.Field field = FieldDetector.detect(serverLevel, getBlockPos());
-        if (field == null) return false;
 
         setProgram(programTag);
-        FarmSimulation sim = FarmSimulation.of(field.width(), field.height(), field.fertile(), FarmConfig.DEFAULT);
-        int startX = clamp(getBlockPos().getX() - field.originX(), field.width());
-        int startZ = clamp(getBlockPos().getZ() - field.originZ(), field.height());
-        DroneApi api = new DroneApi(sim, startX, startZ);
+        FarmSimulation sim = FarmSimulation.allFertile(DroneField.WIDTH, DroneField.HEIGHT, FarmConfig.DEFAULT, RUN_SEED);
+        DroneApi api = new DroneApi(sim, DroneField.START_X, DroneField.START_Z);
         DroneGraph graph = DroneGraphCodec.fromTag(programTag, serverLevel.registryAccess());
 
         this.runtime = new DroneRuntime(graph, api, RUN_SEED);
         this.runState = startPaused ? RunState.PAUSED : RunState.RUNNING;
         this.runTick = 0;
         this.score = 0;
-        this.droneX = startX;
-        this.droneZ = startZ;
-        this.fieldWidth = field.width();
-        this.fieldHeight = field.height();
-        this.fieldOffX = field.originX() - getBlockPos().getX();
-        this.fieldOffZ = field.originZ() - getBlockPos().getZ();
+        this.droneX = DroneField.START_X;
+        this.droneZ = DroneField.START_Z;
+        this.fieldWidth = DroneField.WIDTH;
+        this.fieldHeight = DroneField.HEIGHT;
+        this.fieldOffX = DroneField.OFFSET_X;
+        this.fieldOffZ = DroneField.OFFSET_Z;
         this.pauseTicks = 0;
         this.logText = ""; // fresh run starts with an empty log
         captureCells(sim);
@@ -279,22 +285,70 @@ public class DroneStationBlockEntity extends BlockEntity implements ISyncPersist
     // ---- server tick -------------------------------------------------------------------------
 
     /**
-     * Server tick: applies run <em>policy</em> (abort when the owner goes offline or a pause drags on;
-     * honor a single-step request) and delegates the run <em>mechanics</em> to {@link #tickRun()}.
+     * Server tick: first applies the <em>auto-submit</em> policy (the owner leaving — offline or
+     * {@link #SUBMIT_DISTANCE} blocks away — submits their solution and frees the field for the next
+     * player), then the run <em>policy</em> (abort an over-long pause) and delegates the run
+     * <em>mechanics</em> to {@link #tickRun()}.
      */
     public void serverTick() {
-        if (!(level instanceof ServerLevel)) return;
-        if (runState == RunState.RUNNING) {
-            if (ownerOffline()) {
-                stopRun();
+        if (!(level instanceof ServerLevel serverLevel)) return;
+        if (hasOwner()) {
+            ServerPlayer p = serverLevel.getServer().getPlayerList().getPlayer(getOwner());
+            boolean ownerGone = p == null || p.level() != level
+                    || p.distanceToSqr(Vec3.atCenterOf(getBlockPos())) > SUBMIT_DISTANCE * SUBMIT_DISTANCE;
+            if (ownerGone) {
+                submitAndRemove(p == null ? "offline" : "far");
                 return;
             }
+        }
+        if (runState == RunState.RUNNING) {
             tickRun();
         } else if (runState == RunState.PAUSED) {
-            if (ownerOffline() || ++pauseTicks > MAX_PAUSE_TICKS) {
+            if (++pauseTicks > MAX_PAUSE_TICKS) {
                 stopRun();
             }
         }
+    }
+
+    // ---- submission / leaderboard ------------------------------------------------------------
+
+    /**
+     * A redstone rising edge (e.g. a button press next to the station) submits the owner's solution.
+     */
+    public void onRedstone(boolean powered) {
+        if (powered && !lastPowered) {
+            submitAndRemove("redstone");
+        }
+        lastPowered = powered;
+    }
+
+    /**
+     * Submit the owner's current program for official async scoring, store it for preload on their next
+     * placement, then remove the block (no drop) to free the field. Idempotent — guarded by
+     * {@link #submitted} since the redstone, far and offline triggers can overlap within a tick.
+     */
+    public void submitAndRemove(String reason) {
+        if (submitted || !(level instanceof ServerLevel sl)) return;
+        submitted = true;
+        UUID o = getOwner();
+        if (o != null) {
+            CompoundTag prog = getProgram().copy();
+            String name = ownerName(sl, o);
+            DroneLeaderboard.get(sl).submit(o, name, prog);
+            DroneGraph graph = DroneGraphCodec.fromTag(prog, sl.registryAccess());
+            DroneScoring.submitAsync(sl.getServer(), o, name, graph);
+        }
+        runtime = null;
+        sl.removeBlock(getBlockPos(), false); // silent: free the field for the next player, no item drop
+    }
+
+    /** Best-known display name for the owner: online name, else last-stored, else the raw UUID. */
+    private String ownerName(ServerLevel sl, UUID o) {
+        ServerPlayer p = sl.getServer().getPlayerList().getPlayer(o);
+        if (p != null) return p.getName().getString();
+        DroneLeaderboard.Entry entry = DroneLeaderboard.get(sl).getEntry(o);
+        if (entry != null && !entry.playerName().isEmpty()) return entry.playerName();
+        return o.toString();
     }
 
     /**
@@ -328,18 +382,11 @@ public class DroneStationBlockEntity extends BlockEntity implements ISyncPersist
     private void finishRun() {
         runState = RunState.FINISHED;
         runtime = null;
-        // M8: submit `score` for `owner` to the leaderboard here.
-        // Keep the board as-is so the result stays visible after the program ends (a short program would
-        // otherwise wipe a freshly-planted pumpkin the instant it runs out of nodes). The next run rebuilds
-        // a fresh field; an explicit Stop is what clears the board back to idle.
+        // This is only the in-world *preview* finishing — it does NOT submit to the leaderboard. The
+        // official score comes from {@link DroneScoring#submitAsync}, run on a standardized field when the
+        // player submits (redstone pulse / owner leaves). Keep the board as-is so the result stays visible
+        // after the program ends; an explicit Stop is what clears it back to idle.
         sync(false);
-    }
-
-    private boolean ownerOffline() {
-        UUID o = getOwner();
-        if (o == null) return true;
-        return level == null || level.getServer() == null
-                || level.getServer().getPlayerList().getPlayer(o) == null;
     }
 
     /**
@@ -369,10 +416,6 @@ public class DroneStationBlockEntity extends BlockEntity implements ISyncPersist
         fieldWidth = 0;
         fieldHeight = 0;
         cells = new int[0];
-    }
-
-    private static int clamp(int v, int size) {
-        return Math.max(0, Math.min(size - 1, v));
     }
 
     // ---- managed sync config -----------------------------------------------------------------

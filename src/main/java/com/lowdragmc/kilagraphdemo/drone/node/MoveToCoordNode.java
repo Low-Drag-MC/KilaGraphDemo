@@ -9,10 +9,10 @@ import com.lowdragmc.lowdraglib2.nodegraphtookit.api.node.NodeAttribute;
 import net.minecraft.network.chat.Component;
 
 /**
- * Fly the drone straight to a target cell {@code (x, z)} on the field. The cost is distance-based — one
- * tick per cell of Manhattan distance — so this is no cheaper than chaining the same number of single
- * {@code Move}s, just more convenient. {@code moved} reports whether the target was inside the field
- * (a target outside the field leaves the drone where it is).
+ * Fly the drone straight to a target cell {@code (x, z)} on the field. The cost is distance-based —
+ * {@link MoveNode#DURATION} ticks per cell of Manhattan distance — so flying N cells costs exactly the
+ * same as chaining N single {@code Move}s, just more convenient. {@code moved} reports whether the target
+ * was inside the field (a target outside the field leaves the drone where it is).
  */
 @NodeAttribute(name = "drone.move_to", group = "drone", graphTypes = DroneGraph.class)
 public class MoveToCoordNode extends DroneActionNode {
@@ -31,12 +31,13 @@ public class MoveToCoordNode extends DroneActionNode {
         int distance = Math.abs(tx - api.x()) + Math.abs(tz - api.z());
         boolean ok = api.moveTo(tx, tz);
         ctx.setOutput("moved", ok);
-        return ok ? Math.max(1, distance) : 1;
+        // Same per-cell cost as a single Move, charged for the whole Manhattan distance.
+        return ok ? Math.max(MoveNode.DURATION, distance * MoveNode.DURATION) : MoveNode.DURATION;
     }
 
     @Override
     protected int durationTicks() {
-        return 1; // variable (distance-based); tooltip is a plain description.
+        return MoveNode.DURATION; // per-cell cost; total is distance-based (tooltip is a plain description).
     }
 
     @Override

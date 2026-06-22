@@ -1,17 +1,19 @@
 package com.lowdragmc.kilagraphdemo.client.drone;
 
+import com.lowdragmc.kilagraph.blueprint.nodes.exec.BranchNode;
 import com.lowdragmc.kilagraph.blueprint.nodes.exec.EntryNode;
-import com.lowdragmc.kilagraph.blueprint.nodes.exec.WhileNode;
-import com.lowdragmc.kilagraph.blueprint.nodes.logic.NotNode;
+import com.lowdragmc.kilagraph.blueprint.nodes.exec.ForNode;
 import com.lowdragmc.kilagraphdemo.block.DroneStationBlockEntity;
+import com.lowdragmc.kilagraphdemo.drone.DroneField;
 import com.lowdragmc.kilagraphdemo.drone.DroneMenuSync;
 import com.lowdragmc.kilagraphdemo.drone.graph.DroneGraph;
 import com.lowdragmc.kilagraphdemo.drone.graph.DroneGraphCodec;
+import com.lowdragmc.kilagraphdemo.drone.node.ClearNode;
+import com.lowdragmc.kilagraphdemo.drone.node.DronePrintNode;
 import com.lowdragmc.kilagraphdemo.drone.node.HarvestNode;
-import com.lowdragmc.kilagraphdemo.drone.node.MoveNode;
+import com.lowdragmc.kilagraphdemo.drone.node.MoveToCoordNode;
 import com.lowdragmc.kilagraphdemo.drone.node.PlantNode;
 import com.lowdragmc.kilagraphdemo.drone.node.ScanCellNode;
-import com.lowdragmc.kilagraphdemo.drone.node.WaitNode;
 import com.lowdragmc.kilagraphdemo.farm.RunState;
 import com.lowdragmc.kilagraphdemo.network.C2SDroneControl;
 import com.lowdragmc.kilagraphdemo.network.C2SSaveDroneProgram;
@@ -23,6 +25,7 @@ import com.lowdragmc.lowdraglib2.gui.ui.UI;
 import com.lowdragmc.lowdraglib2.gui.ui.UIElement;
 import com.lowdragmc.lowdraglib2.gui.ui.data.Vertical;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Button;
+import com.lowdragmc.lowdraglib2.gui.ui.elements.Dialog;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Label;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.SplitView;
 import com.lowdragmc.lowdraglib2.gui.ui.event.UIEvents;
@@ -66,6 +69,13 @@ import java.util.UUID;
  */
 public final class DroneStationClientUI {
 
+    /**
+     * The station whose menu is open on this client, or {@code null}. Read by {@link DroneStationRenderer}
+     * to draw the field's coordinate labels only for the station the player is currently programming.
+     */
+    @Nullable
+    public static volatile BlockPos openStation;
+
     private final BlockPos stationPos;
     private final boolean owner;
     private final DroneMenuSync.Bindings sync;
@@ -77,6 +87,11 @@ public final class DroneStationClientUI {
     /** Dock panel showing the run's print output, fed from the synced log each tick. */
     private final DroneLogPanel logPanel = new DroneLogPanel();
     private boolean programLoaded;
+
+    /** Serialized graph as last sent to the server (upload/run/step) or loaded; used to detect ESC-close edits. */
+    private CompoundTag lastSyncedTag = new CompoundTag();
+    /** True while our unsaved-changes dialog is open, so the ESC handler lets the dialog consume its own ESC. */
+    private boolean dialogOpen;
 
     // true while a run is in progress: capture-phase guards swallow editing input on the editor
     private boolean readOnly;
@@ -105,6 +120,8 @@ public final class DroneStationClientUI {
 
         UIElement root = new UIElement();
         ModularUI ui = new ModularUI(UI.of(root, StylesheetManager.ORE_MERGED), holder.player);
+        // We handle ESC ourselves so we can confirm before discarding unsaved graph edits.
+        ui.shouldCloseOnEsc(false);
         DroneMenuSync.Bindings sync = DroneMenuSync.register(ui, true, be);
 
         new DroneStationClientUI(holder.pos, owner, sync).buildInto(root);
@@ -139,24 +156,62 @@ public final class DroneStationClientUI {
         installLogPanel();
 
         // Fly the render camera over the station while the UI is open; restore it when the screen closes
-        // (REMOVED fires via ModularUI.onRemoved from Screen.removed()).
+        // (REMOVED fires via ModularUI.onRemoved from Screen.removed()). Also flag this station so the
+        // renderer overlays its coordinate labels, and clear both on close.
+        openStation = stationPos;
         activateCamera();
         installFlyControls(root);
-        root.addEventListener(UIEvents.REMOVED, e -> CameraOverrideManager.INSTANCE.deactivate());
+        root.addEventListener(UIEvents.REMOVED, e -> {
+            CameraOverrideManager.INSTANCE.deactivate();
+            if (stationPos.equals(openStation)) openStation = null;
+        });
+
+        // Intercept ESC (vanilla close is disabled via shouldCloseOnEsc(false)) so we can confirm before
+        // throwing away un-uploaded graph edits. Capture phase so we see it before child elements.
+        root.addEventListener(UIEvents.KEY_DOWN, e -> {
+            if (e.keyCode != GLFW.GLFW_KEY_ESCAPE || dialogOpen) return; // let an open dialog handle its own ESC
+            e.stopPropagation();
+            if (isGraphDirty()) {
+                promptCloseUnsaved();
+            } else {
+                closeScreen();
+            }
+        }, true);
 
         root.addEventListener(UIEvents.TICK, e -> onTick());
         refreshStatus(RunState.IDLE);
     }
 
+    /** Ask whether to upload before closing when the graph has un-uploaded edits. */
+    private void promptCloseUnsaved() {
+        dialogOpen = true;
+        Dialog.showCancelableCheck("Dialog.notify", "view.save_before_close.info", save -> {
+            dialogOpen = false;
+            if (save) {
+                upload();
+            }
+            closeScreen();
+        }, () -> dialogOpen = false).show(editorView.getModularUI());
+    }
+
+    /** Close the station menu (proper container close so the server releases the menu). */
+    private void closeScreen() {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player != null) {
+            mc.player.closeContainer();
+        } else {
+            mc.setScreen(null);
+        }
+    }
+
     /**
      * Top-down orthographic view: camera straight above the station looking down, shifted horizontally so
-     * the farm sits in the visible right half of the screen (the left half is the editor panel). If the
-     * farm ends up on the wrong side, flip the sign of {@link #VIEW_SHIFT_X}.
+     * the farm sits in the visible right half of the screen (the left half is the editor panel).
      */
     private void activateCamera() {
         Vec3 center = Vec3.atCenterOf(stationPos);
-        Vec3 camPos = center.add(10, 10, -3); // straight above; X-shift frames it into the right half
-        CameraOverrideManager.INSTANCE.activate(camPos, 30f, 55f, center, FLY_RADIUS); // pitch 90 = straight down
+        Vec3 camPos = center.add(-5, 5, 5); // straight above; X-shift frames it into the right half
+        CameraOverrideManager.INSTANCE.activate(camPos, 30f + 180, 55f, center, FLY_RADIUS); // pitch 90 = straight down
     }
 
     /**
@@ -248,6 +303,17 @@ public final class DroneStationClientUI {
     private void loadIntoEditor(DroneGraph graph) {
         editorView.loadGraph(graph, this::onEditorSaved);
         editorView.saveButton.removeSelf();
+        markGraphSynced(); // a freshly loaded graph matches the server — not dirty
+    }
+
+    /** Snapshot the current editor graph as the baseline for unsaved-change detection. */
+    private void markGraphSynced() {
+        lastSyncedTag = editorView.serializeGraph();
+    }
+
+    /** Whether the editor graph differs from what was last sent to / loaded from the server. */
+    private boolean isGraphDirty() {
+        return !editorView.serializeGraph().equals(lastSyncedTag);
     }
 
     /** Upload the current editor graph to the server block entity (owner-gated server-side). */
@@ -258,6 +324,7 @@ public final class DroneStationClientUI {
     /** Editor "save" callback: persist the serialized graph onto the server block entity. */
     private void onEditorSaved(CompoundTag tag) {
         ClientPacketDistributor.sendToServer(new C2SSaveDroneProgram(stationPos, tag));
+        lastSyncedTag = tag.copy(); // now in sync with the server
     }
 
     /** Upload the latest graph then start a continuous run (runs until Stop/Pause or the program ends). */
@@ -357,34 +424,60 @@ public final class DroneStationClientUI {
     }
 
     /**
-     * Build the default starter program: {@code Entry → Move(north) → Plant → While(not ripe){ Wait } →
-     * Harvest}. The {@code While} re-scans the drone's current cell each iteration and waits until the
-     * pumpkin ripens, then harvests — a complete, working example a player can tweak.
+     * Build the default starter program: a nested {@code For x (0..8) { For z (0..8) { … } }} sweep that
+     * visits every cell of the fixed 9×9 field by {@link MoveToCoordNode absolute coordinate}, scans the
+     * cell, and tends it — plant if plantable, else harvest if ripe, else clear if rotten — logging the
+     * cell's merge size each step. A complete, working example a player can tweak.
+     *
+     * <p>(Reconstruction of the user-authored graph: the cosmetic wire portals "pos x"/"pos z"/"- next"
+     * are flattened into direct wires here — behaviourally identical.)</p>
      */
     private static DroneGraph newProgram() {
         DroneGraph graph = new DroneGraph();
         CustomGraphModelImpl gm = graph.graphModel;
 
-        NodeModel entry = gm.createNodeModel(new EntryNode(), new Vector2f(0, 0));
-        NodeModel move = gm.createNodeModel(new MoveNode(), new Vector2f(160, 0));
-        NodeModel plant = gm.createNodeModel(new PlantNode(), new Vector2f(320, 0));
-        NodeModel whileNode = gm.createNodeModel(new WhileNode(), new Vector2f(480, 0));
-        NodeModel wait = gm.createNodeModel(new WaitNode(), new Vector2f(480, 140));
-        NodeModel scan = gm.createNodeModel(new ScanCellNode(), new Vector2f(160, 220));
-        NodeModel not = gm.createNodeModel(new NotNode(), new Vector2f(320, 220));
-        NodeModel harvest = gm.createNodeModel(new HarvestNode(), new Vector2f(680, 0));
+        NodeModel entry = gm.createNodeModel(new EntryNode(), new Vector2f(-240, -64));
+        NodeModel forX = gm.createNodeModel(new ForNode(), new Vector2f(-120, -64));
+        NodeModel forZ = gm.createNodeModel(new ForNode(), new Vector2f(40, -64));
+        NodeModel move = gm.createNodeModel(new MoveToCoordNode(), new Vector2f(220, -64));
+        NodeModel print = gm.createNodeModel(new DronePrintNode(), new Vector2f(380, -64));
+        NodeModel scan = gm.createNodeModel(new ScanCellNode(), new Vector2f(40, 200));
+        NodeModel bPlant = gm.createNodeModel(new BranchNode(), new Vector2f(540, -64));
+        NodeModel bRipe = gm.createNodeModel(new BranchNode(), new Vector2f(540, 120));
+        NodeModel bRotten = gm.createNodeModel(new BranchNode(), new Vector2f(540, 300));
+        NodeModel plant = gm.createNodeModel(new PlantNode(), new Vector2f(720, -64));
+        NodeModel harvest = gm.createNodeModel(new HarvestNode(), new Vector2f(720, 120));
+        NodeModel clear = gm.createNodeModel(new ClearNode(), new Vector2f(720, 300));
 
-        // exec chain
-        wireExec(gm, entry, "next", move, "trigger");
-        wireExec(gm, move, "next", plant, "trigger");
-        wireExec(gm, plant, "next", whileNode, "in");
-        wireExec(gm, whileNode, "body", wait, "trigger");      // loop while not ripe: wait
-        wireExec(gm, whileNode, "completed", harvest, "trigger"); // ripe: harvest
+        setConstant(forX, "count", DroneField.SIZE);
+        setConstant(forZ, "count", DroneField.SIZE);
 
-        // data: while.cond = NOT(scan(current cell).ripe)
-        wireData(gm, scan, "ripe", not, "in");
-        wireData(gm, not, "out", whileNode, "cond");
+        // exec: Entry → For x → (body) For z → (body) MoveTo → Print → Branch(plantable)
+        wireExec(gm, entry, "next", forX, "in");
+        wireExec(gm, forX, "body", forZ, "in");
+        wireExec(gm, forZ, "body", move, "trigger");
+        wireExec(gm, move, "next", print, "trigger");
+        wireExec(gm, print, "next", bPlant, "in");
+        // plantable? plant : (check ripe?) harvest : (check rotten?) clear : nothing (iteration ends)
+        wireExec(gm, bPlant, "trueExec", plant, "trigger");
+        wireExec(gm, bPlant, "falseExec", bRipe, "in");
+        wireExec(gm, bRipe, "trueExec", harvest, "trigger");
+        wireExec(gm, bRipe, "falseExec", bRotten, "in");
+        wireExec(gm, bRotten, "trueExec", clear, "trigger");
+
+        // data: target cell = (forX.index, forZ.index); scan that cell (relative dx=dz=0 after the move)
+        wireData(gm, forX, "index", move, "x");
+        wireData(gm, forZ, "index", move, "z");
+        wireData(gm, scan, "plantable", bPlant, "cond");
+        wireData(gm, scan, "ripe", bRipe, "cond");
+        wireData(gm, scan, "rotten", bRotten, "cond");
+        wireData(gm, scan, "mergeSize", print, "value");
         return graph;
+    }
+
+    private static void setConstant(NodeModel node, String inputId, Object value) {
+        var c = node.getInputConstantsById().get(inputId);
+        if (c != null) c.setValue(value);
     }
 
     private static void wireExec(CustomGraphModelImpl gm, NodeModel from, String fromId,

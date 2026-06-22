@@ -32,6 +32,7 @@ public class DroneRuntime {
 
     private final FarmSimulation sim;
     private final DroneApi api;
+    private final GraphExecutor executor;
     private final ExecSession session;
     @Nullable
     private final NodeModel entry;
@@ -47,7 +48,7 @@ public class DroneRuntime {
         this.sim = api.sim();
         EvaluationEnvironment env = new EvaluationEnvironment(
                 new VariableStore(Map.of(DroneApi.ENV_KEY, api)), OptionalLong.of(seed));
-        GraphExecutor executor = new GraphExecutor(graph, env);
+        this.executor = new GraphExecutor(graph, env);
         this.session = new ExecSession(executor);
         this.entry = findEntry(graph);
         if (entry != null) {
@@ -63,6 +64,14 @@ public class DroneRuntime {
         sim.tick();
         if (finished || halted) return;
         if (currentTick < busyUntil) return; // drone mid-action
+
+        // Drop memoised pure-node outputs before stepping this tick. Drone sensors (ScanCell/Pos/Score/
+        // TickInfo) read live external state (drone position, the farm); the executor otherwise caches
+        // their outputs by port for its lifetime (only loops clear it), so a sensor read outside a loop
+        // body — or simply on the next tick after the drone moved — would return a stale value. Clearing
+        // here is safe: between ticks the session is paused between exec nodes, nodeState (loop counters,
+        // Cache memos) is untouched, and action nodes are executed via flow, never re-pulled.
+        executor.clearCache();
 
         int steps = 0;
         while (true) {

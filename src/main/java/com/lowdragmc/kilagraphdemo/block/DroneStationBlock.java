@@ -2,11 +2,14 @@ package com.lowdragmc.kilagraphdemo.block;
 
 import com.lowdragmc.kilagraphdemo.ModRegistries;
 import com.lowdragmc.kilagraphdemo.drone.DroneMenuSync;
+import com.lowdragmc.kilagraphdemo.server.DroneLeaderboard;
 import com.lowdragmc.lowdraglib2.gui.factory.BlockUIMenuType;
 import com.lowdragmc.lowdraglib2.gui.ui.ModularUI;
 import com.lowdragmc.lowdraglib2.gui.ui.UI;
 import com.lowdragmc.lowdraglib2.gui.ui.UIElement;
 import net.minecraft.core.BlockPos;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.LivingEntity;
@@ -19,6 +22,7 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityTicker;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.redstone.Orientation;
 import net.minecraft.world.phys.BlockHitResult;
 import org.jetbrains.annotations.Nullable;
 
@@ -49,6 +53,26 @@ public class DroneStationBlock extends Block implements EntityBlock, BlockUIMenu
         if (!level.isClientSide() && placer instanceof Player player
                 && level.getBlockEntity(pos) instanceof DroneStationBlockEntity be) {
             be.setOwner(player.getUUID());
+            // Preload the player's last submitted solution so they continue from where they left off.
+            if (level instanceof ServerLevel serverLevel) {
+                CompoundTag prev = DroneLeaderboard.get(serverLevel).getProgram(player.getUUID());
+                if (prev != null && !prev.isEmpty()) {
+                    be.setProgram(prev);
+                }
+            }
+        }
+    }
+
+    /**
+     * A redstone signal (e.g. a button placed beside the station) submits the owner's solution: on a
+     * rising edge the block scores the program and removes itself to free the field for the next player.
+     */
+    @Override
+    protected void neighborChanged(BlockState state, Level level, BlockPos pos, Block neighborBlock,
+                                   @Nullable Orientation orientation, boolean movedByPiston) {
+        super.neighborChanged(state, level, pos, neighborBlock, orientation, movedByPiston);
+        if (!level.isClientSide() && level.getBlockEntity(pos) instanceof DroneStationBlockEntity be) {
+            be.onRedstone(level.hasNeighborSignal(pos));
         }
     }
 
@@ -80,6 +104,7 @@ public class DroneStationBlock extends Block implements EntityBlock, BlockUIMenu
             return com.lowdragmc.kilagraphdemo.client.drone.DroneStationClientUI.build(holder, be);
         }
         ModularUI ui = new ModularUI(UI.of(new UIElement()), holder.player);
+        ui.shouldCloseOnKeyInventory(false);
         DroneMenuSync.register(ui, false, be);
         return ui;
     }
