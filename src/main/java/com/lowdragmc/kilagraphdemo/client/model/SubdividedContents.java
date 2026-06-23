@@ -28,9 +28,9 @@ public final class SubdividedContents {
     public static KGPreviewContent of(String key, int subdivisions) {
         int sub = Math.max(1, subdivisions);
         return switch (key) {
-            case QUAD -> content(QUAD, "Quad", mb -> quad(mb, sub));
-            case SPHERE -> content(SPHERE, "Sphere", mb -> sphere(mb, sub));
-            default -> content(CUBE, "Cube", mb -> cube(mb, sub));
+            case QUAD -> content(QUAD, "kilagraphdemo.ui.editor.kind_quad", mb -> quad(mb, sub));
+            case SPHERE -> content(SPHERE, "kilagraphdemo.ui.editor.kind_sphere", mb -> sphere(mb, sub));
+            default -> content(CUBE, "kilagraphdemo.ui.editor.kind_cube", mb -> cube(mb, sub));
         };
     }
 
@@ -47,7 +47,7 @@ public final class SubdividedContents {
 
             @Override
             public Component title() {
-                return Component.literal(label);
+                return Component.translatable(label);
             }
 
             @Override

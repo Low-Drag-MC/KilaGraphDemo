@@ -64,7 +64,7 @@ public final class UploadAssembler {
         // Per-chunk size guard: closes the gap where the packet decoder allows oversized byte arrays.
         if (data.length > Chunks.CHUNK_SIZE) {
             TRANSFERS.remove(transferId);
-            player.sendSystemMessage(Component.literal("Upload rejected: chunk too large."));
+            player.sendSystemMessage(Component.translatable("message.kilagraphdemo.upload_chunk_too_large"));
             return;
         }
 
@@ -74,12 +74,12 @@ public final class UploadAssembler {
             Long last = LAST_UPLOAD.get(who);
             if (last != null && now - last < Kilagraphdemo.UPLOAD_COOLDOWN_MS) {
                 long wait = (Kilagraphdemo.UPLOAD_COOLDOWN_MS - (now - last) + 999) / 1000;
-                player.sendSystemMessage(Component.literal(
-                        "Please wait " + wait + "s before uploading again."));
+                player.sendSystemMessage(Component.translatable(
+                        "message.kilagraphdemo.upload_cooldown", wait));
                 return;
             }
             if (concurrentTransfers(who) >= Kilagraphdemo.MAX_CONCURRENT_TRANSFERS) {
-                player.sendSystemMessage(Component.literal("Too many uploads in progress."));
+                player.sendSystemMessage(Component.translatable("message.kilagraphdemo.upload_too_many"));
                 return;
             }
             state = new TransferState(who, total, now);
@@ -94,7 +94,7 @@ public final class UploadAssembler {
         }
         if (state.bytes > Kilagraphdemo.MAX_UPLOAD_BYTES) {
             TRANSFERS.remove(transferId);
-            player.sendSystemMessage(Component.literal("Upload rejected: work too large."));
+            player.sendSystemMessage(Component.translatable("message.kilagraphdemo.upload_work_too_large"));
             return;
         }
         if (!complete) return;
@@ -108,7 +108,7 @@ public final class UploadAssembler {
         } catch (IOException | RuntimeException e) {
             // RuntimeException covers the NbtAccounter tripping on an oversized/decompression-bomb payload.
             LOGGER.warn("[KilaGraphDemo] failed to parse uploaded package from {}", player.getName().getString(), e);
-            player.sendSystemMessage(Component.literal("Upload rejected: malformed work."));
+            player.sendSystemMessage(Component.translatable("message.kilagraphdemo.upload_malformed"));
             return;
         }
 
@@ -119,17 +119,16 @@ public final class UploadAssembler {
             LAST_UPLOAD.put(who, now);
         }
         switch (result.status()) {
-            case PUBLISHED -> player.sendSystemMessage(Component.literal("Work published."));
+            case PUBLISHED -> player.sendSystemMessage(Component.translatable("message.kilagraphdemo.work_published"));
             case UPDATED -> {
-                player.sendSystemMessage(Component.literal("Work updated."));
+                player.sendSystemMessage(Component.translatable("message.kilagraphdemo.work_updated"));
                 // Notify other players so any placed hologram/projector showing this work re-pulls it.
                 if (result.meta() != null) {
                     ModNetworking.broadcastWorkUpdated(player, result.meta().uid(), result.meta().version());
                 }
             }
-            case REJECTED_LIMIT -> player.sendSystemMessage(Component.literal(
-                    "Upload limit reached (" + Kilagraphdemo.MAX_WORKS_PER_PLAYER
-                            + "). Delete one of your works first."));
+            case REJECTED_LIMIT -> player.sendSystemMessage(Component.translatable(
+                    "message.kilagraphdemo.upload_limit", Kilagraphdemo.MAX_WORKS_PER_PLAYER));
         }
         ModNetworking.sendList(player);
     }

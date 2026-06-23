@@ -33,6 +33,7 @@ import com.lowdragmc.lowdraglib2.gui.ui.event.UIEvents;
 import dev.vfyjxf.taffy.style.FlexDirection;
 import lombok.Getter;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.resources.language.I18n;
 import net.minecraft.core.GlobalPos;
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.Nullable;
@@ -123,12 +124,13 @@ public class HologramBrowseUI implements ClientWorks.Listener {
         // Left column: server list (top), local list (bottom), New button.
         UIElement left = new UIElement();
         left.getLayout().flexDirection(FlexDirection.COLUMN).heightPercent(100).width(150).gapAll(2);
-        left.addChild(sectionLabel("Server"));
+        left.addChild(sectionLabel("kilagraphdemo.ui.hologram.section_server"));
         left.addChild(sortRow());
         left.addChild(listView(serverListContainer));
-        left.addChild(sectionLabel("Local"));
+        left.addChild(sectionLabel("kilagraphdemo.ui.hologram.section_local"));
         left.addChild(listView(localListContainer));
-        left.addChild(new Button().setText("New").setOnClick(e -> onNew()));
+        left.addChild(new Button().setText("kilagraphdemo.ui.hologram.new").setOnClick(e -> onNew())
+                .style(s -> s.appendTooltipsString("kilagraphdemo.ui.hologram.new.tooltip")));
 
         // Right column: meta header row (labels + avatar), body (description), action buttons.
         UIElement right = new UIElement();
@@ -167,9 +169,12 @@ public class HologramBrowseUI implements ClientWorks.Listener {
     private UIElement sortRow() {
         UIElement row = new UIElement();
         row.getLayout().flexDirection(FlexDirection.ROW).widthPercent(100).gapAll(1).height(12);
-        row.addChild(sortButton("Liked", SortMode.MOST_LIKED));
-        row.addChild(sortButton("New", SortMode.NEWEST));
-        row.addChild(sortButton("Old", SortMode.OLDEST));
+        row.addChild(sortButton("kilagraphdemo.ui.hologram.sort_liked",
+                "kilagraphdemo.ui.hologram.sort_liked.tooltip", SortMode.MOST_LIKED));
+        row.addChild(sortButton("kilagraphdemo.ui.hologram.sort_new",
+                "kilagraphdemo.ui.hologram.sort_new.tooltip", SortMode.NEWEST));
+        row.addChild(sortButton("kilagraphdemo.ui.hologram.sort_old",
+                "kilagraphdemo.ui.hologram.sort_old.tooltip", SortMode.OLDEST));
         row.addChild(mineFilterButton());
         return row;
     }
@@ -178,6 +183,7 @@ public class HologramBrowseUI implements ClientWorks.Listener {
     private Button mineFilterButton() {
         mineButton = new Button().setText(mineLabel());
         mineButton.getLayout().flex(1).heightPercent(100);
+        mineButton.style(s -> s.appendTooltipsString("kilagraphdemo.ui.hologram.mine.tooltip"));
         mineButton.setOnClick(e -> {
             mineOnly = !mineOnly;
             mineButton.setText(mineLabel());
@@ -186,13 +192,14 @@ public class HologramBrowseUI implements ClientWorks.Listener {
         return mineButton;
     }
 
-    private String mineLabel() {
-        return mineOnly ? "Mine ✓" : "Mine";
+    private Component mineLabel() {
+        return Component.translatable(mineOnly ? "kilagraphdemo.ui.hologram.mine_on" : "kilagraphdemo.ui.hologram.mine");
     }
 
-    private Button sortButton(String label, SortMode mode) {
-        Button button = new Button().setText(label);
+    private Button sortButton(String labelKey, String tooltipKey, SortMode mode) {
+        Button button = new Button().setText(labelKey);
         button.getLayout().flex(1).heightPercent(100);
+        button.style(s -> s.appendTooltipsString(tooltipKey));
         button.setOnClick(e -> {
             sortMode = mode;
             refreshServerList();
@@ -200,9 +207,9 @@ public class HologramBrowseUI implements ClientWorks.Listener {
         return button;
     }
 
-    private Label sectionLabel(String text) {
+    private Label sectionLabel(String key) {
         Label l = new Label();
-        l.setText(Component.literal(text));
+        l.setText(Component.translatable(key));
         l.getLayout().height(9);
         return l;
     }
@@ -246,9 +253,10 @@ public class HologramBrowseUI implements ClientWorks.Listener {
         idx.textStyle(style -> style.textAlignVertical(Vertical.CENTER).textColor(ColorPattern.WHITE.color));
         idx.getLayout().width(12).heightPercent(100);
 
-        String authorTag = mine ? "(yours)" : "(" + (m.authorName().isEmpty() ? "?" : m.authorName()) + ")";
+        Component authorTag = mine ? Component.translatable("kilagraphdemo.ui.hologram.yours")
+                : Component.literal("(" + (m.authorName().isEmpty() ? "?" : m.authorName()) + ")");
         Label name = new Label();
-        name.setText(Component.literal(m.title() + " " + authorTag));
+        name.setText(Component.literal(m.title() + " ").append(authorTag));
         name.textStyle(style -> {
             style.textWrap(TextWrap.HOVER_ROLL).textAlignVertical(Vertical.CENTER);
             if (mine) style.textColor(ColorPattern.YELLOW.color);
@@ -275,7 +283,8 @@ public class HologramBrowseUI implements ClientWorks.Listener {
         String displayedUid = blockEntity == null ? null : blockEntity.getDisplayedWorkUid();
         for (WorkMeta meta : LocalGraphStore.list()) {
             if (meta.isSlideShow()) continue; // SlideShow graph works belong to the projector browser
-            String title = meta.title() + (meta.uid().equals(displayedUid) ? "  (displayed)" : "");
+            Component title = Component.literal(meta.title()).append(meta.uid().equals(displayedUid)
+                    ? Component.translatable("kilagraphdemo.ui.hologram.displayed") : Component.empty());
             UIElement row = createRow(title, () -> onSelectLocal(meta), meta);
             localRows.put(meta.uid(), row);
             localListContainer.addChild(row);
@@ -284,9 +293,9 @@ public class HologramBrowseUI implements ClientWorks.Listener {
     }
 
     /** A list row: vertically-centred, roll-on-hover label; click selects. Local rows rename on double-click. */
-    private UIElement createRow(String title, Runnable onClick, @Nullable WorkMeta localMeta) {
+    private UIElement createRow(Component title, Runnable onClick, @Nullable WorkMeta localMeta) {
         Label label = new Label();
-        label.setText(Component.literal(title));
+        label.setText(title);
         label.textStyle(style -> style.textWrap(TextWrap.HOVER_ROLL).textAlignVertical(Vertical.CENTER));
         label.setOverflowVisible(false);
         label.getLayout().widthPercent(100).heightPercent(100);
@@ -350,14 +359,14 @@ public class HologramBrowseUI implements ClientWorks.Listener {
         } else if (selectedLocal != null) {
             buildLocalDetail(selectedLocal);
         } else {
-            metaLabels.addChild(metaLabel("Select a work", ColorPattern.WHITE.color));
+            metaLabels.addChild(metaLabel(Component.translatable("kilagraphdemo.ui.hologram.select_work"), ColorPattern.WHITE.color));
         }
     }
 
     /** A colour-coded, single-line meta label (roll-on-hover so long values are still readable). */
-    private Label metaLabel(String text, int color) {
+    private Label metaLabel(Component text, int color) {
         Label l = new Label();
-        l.setText(Component.literal(text));
+        l.setText(text);
         l.textStyle(style -> style.textColor(color).textShadow(false).textWrap(TextWrap.HOVER_ROLL).textAlignVertical(Vertical.CENTER));
         l.setOverflowVisible(false);
         l.getLayout().widthPercent(100).height(9);
@@ -367,14 +376,15 @@ public class HologramBrowseUI implements ClientWorks.Listener {
     private void buildServerDetail(ServerWorkEntry entry) {
         WorkMeta m = entry.meta();
         // Colour-coded meta labels (one per field) on the left of the header row.
-        metaLabels.addChild(metaLabel(m.title(), ColorPattern.YELLOW.color));
-        metaLabels.addChild(metaLabel("by " + (m.authorName().isEmpty() ? "?" : m.authorName()), ColorPattern.CYAN.color));
-        metaLabels.addChild(metaLabel("first: " + date(m.firstUploadTime()), ColorPattern.GRAY.color));
-        metaLabels.addChild(metaLabel("updated: " + date(m.lastUpdateTime()), ColorPattern.GRAY.color));
-        metaLabels.addChild(metaLabel("likes: " + entry.likeCount(), ColorPattern.PINK.color));
+        metaLabels.addChild(metaLabel(Component.literal(m.title()), ColorPattern.YELLOW.color));
+        metaLabels.addChild(metaLabel(Component.translatable("kilagraphdemo.ui.hologram.meta_by",
+                m.authorName().isEmpty() ? "?" : m.authorName()), ColorPattern.CYAN.color));
+        metaLabels.addChild(metaLabel(Component.translatable("kilagraphdemo.ui.hologram.meta_first", date(m.firstUploadTime())), ColorPattern.GRAY.color));
+        metaLabels.addChild(metaLabel(Component.translatable("kilagraphdemo.ui.hologram.meta_updated", date(m.lastUpdateTime())), ColorPattern.GRAY.color));
+        metaLabels.addChild(metaLabel(Component.translatable("kilagraphdemo.ui.hologram.meta_likes", entry.likeCount()), ColorPattern.PINK.color));
         Optional<Integer> localVer = localVersionOf(m.uid());
         boolean updateAvailable = localVer.isPresent() && localVer.get() < m.version();
-        if (updateAvailable) metaLabels.addChild(metaLabel("(update available)", ColorPattern.ORANGE.color));
+        if (updateAvailable) metaLabels.addChild(metaLabel(Component.translatable("kilagraphdemo.ui.hologram.update_available"), ColorPattern.ORANGE.color));
 
         // Author avatar (3D) on the right of the header row.
         if (!m.authorUuid().isEmpty()) {
@@ -392,22 +402,25 @@ public class HologramBrowseUI implements ClientWorks.Listener {
         // Actions.
         if (ClientWorks.isDownloading(m.uid())) {
             int pct = Math.round(ClientWorks.downloadProgress(m.uid()) * 100);
-            actions.addChild(metaLabel("Downloading… " + pct + "%", ColorPattern.GREEN.color));
+            actions.addChild(metaLabel(Component.translatable("kilagraphdemo.ui.hologram.downloading", pct), ColorPattern.GREEN.color));
         } else {
-            String download = localVer.isEmpty() ? "Download" : (updateAvailable ? "Update (re-download)" : "Re-download");
-            actions.addChild(new Button().setText(download).setOnClick(e -> ClientWorks.download(m.uid())));
+            String download = localVer.isEmpty() ? "kilagraphdemo.ui.hologram.download"
+                    : (updateAvailable ? "kilagraphdemo.ui.hologram.update" : "kilagraphdemo.ui.hologram.redownload");
+            actions.addChild(new Button().setText(download).setOnClick(e -> ClientWorks.download(m.uid()))
+                    .style(s -> s.appendTooltipsString("kilagraphdemo.ui.hologram.download.tooltip")));
         }
-        actions.addChild(new Button().setText(entry.likedByMe() ? "Unlike" : "Like")
-                .setOnClick(e -> ClientWorks.setLike(m.uid(), !entry.likedByMe())));
+        actions.addChild(new Button().setText(entry.likedByMe() ? "kilagraphdemo.ui.common.unlike" : "kilagraphdemo.ui.common.like")
+                .setOnClick(e -> ClientWorks.setLike(m.uid(), !entry.likedByMe()))
+                .style(s -> s.appendTooltipsString("kilagraphdemo.ui.common.like.tooltip")));
         // Deleting a published work happens here (on the server entry), not on the local copy. The author
         // may delete their own; a Creative/Op player may delete anyone's.
         if (isMine(entry) || (Minecraft.getInstance().player != null
                 && Kilagraphdemo.canBypassUploadLimit(Minecraft.getInstance().player))) {
-            actions.addChild(new Button().setText("Delete from server")
+            actions.addChild(new Button().setText("kilagraphdemo.ui.hologram.delete_server")
                     .setOnClick(e -> {
                         clearDisplayIfShowing(m.uid());
                         ClientWorks.delete(m.uid());
-                    }));
+                    }).style(s -> s.appendTooltipsString("kilagraphdemo.ui.hologram.delete_server.tooltip")));
         }
     }
 
@@ -416,7 +429,7 @@ public class HologramBrowseUI implements ClientWorks.Listener {
         ScrollerView sv = new ScrollerView();
         sv.getLayout().widthPercent(100).height(40);
         Label l = new Label();
-        l.setText(Component.literal(text.isEmpty() ? "(no description)" : text));
+        l.setText(text.isEmpty() ? Component.translatable("kilagraphdemo.ui.common.no_description") : Component.literal(text));
         l.textStyle(style -> style.textWrap(TextWrap.WRAP).adaptiveHeight(true));
         l.getLayout().widthPercent(100);
         sv.addScrollViewChild(l);
@@ -440,20 +453,25 @@ public class HologramBrowseUI implements ClientWorks.Listener {
     }
 
     private void buildLocalDetail(WorkMeta m) {
-        metaLabels.addChild(metaLabel(m.title(), ColorPattern.YELLOW.color));
-        metaLabels.addChild(metaLabel("model: " + model.describe(), ColorPattern.CYAN.color));
-        metaLabels.addChild(metaLabel("(double-click a row to rename)", ColorPattern.GRAY.color));
+        metaLabels.addChild(metaLabel(Component.literal(m.title()), ColorPattern.YELLOW.color));
+        metaLabels.addChild(metaLabel(Component.translatable("kilagraphdemo.ui.hologram.meta_model", model.describe()), ColorPattern.CYAN.color));
+        metaLabels.addChild(metaLabel(Component.translatable("kilagraphdemo.ui.hologram.rename_hint"), ColorPattern.GRAY.color));
 
         // Editable multi-line description (used on upload) in the body.
         descriptionField.setLines(Arrays.asList(m.description().split("\n", -1)));
-        body.addChild(sectionLabel("Description:"));
+        body.addChild(sectionLabel("kilagraphdemo.ui.hologram.description"));
         body.addChild(descriptionField);
 
-        actions.addChild(new Button().setText("Edit").setOnClick(e -> onEdit()));
-        actions.addChild(new Button().setText("Display").setOnClick(e -> onDisplay()));
-        actions.addChild(new Button().setText("Placement…").setOnClick(e -> onPlacement()));
-        actions.addChild(new Button().setText("Upload").setOnClick(e -> onUpload()));
-        actions.addChild(new Button().setText("Delete (local)").setOnClick(e -> onDeleteLocal(m.uid())));
+        actions.addChild(new Button().setText("kilagraphdemo.ui.hologram.edit").setOnClick(e -> onEdit())
+                .style(s -> s.appendTooltipsString("kilagraphdemo.ui.hologram.edit.tooltip")));
+        actions.addChild(new Button().setText("kilagraphdemo.ui.hologram.display").setOnClick(e -> onDisplay())
+                .style(s -> s.appendTooltipsString("kilagraphdemo.ui.hologram.display.tooltip")));
+        actions.addChild(new Button().setText("kilagraphdemo.ui.hologram.placement").setOnClick(e -> onPlacement())
+                .style(s -> s.appendTooltipsString("kilagraphdemo.ui.hologram.placement.tooltip")));
+        actions.addChild(new Button().setText("kilagraphdemo.ui.hologram.upload").setOnClick(e -> onUpload())
+                .style(s -> s.appendTooltipsString("kilagraphdemo.ui.hologram.upload.tooltip")));
+        actions.addChild(new Button().setText("kilagraphdemo.ui.hologram.delete_local").setOnClick(e -> onDeleteLocal(m.uid()))
+                .style(s -> s.appendTooltipsString("kilagraphdemo.ui.hologram.delete_local.tooltip")));
     }
 
     private static String date(long ms) {
@@ -509,8 +527,8 @@ public class HologramBrowseUI implements ClientWorks.Listener {
         // A description is required to publish (so shared works are documented).
         String desc = String.join("\n", descriptionField.getValue());
         if (desc.isBlank()) {
-            Dialog.showNotification("Description required",
-                    "Please write a description before uploading.", null).show(root);
+            Dialog.showNotification("kilagraphdemo.ui.hologram.dlg.desc_required.title",
+                    "kilagraphdemo.ui.hologram.dlg.desc_required.body", null).show(root);
             return;
         }
 
@@ -520,9 +538,8 @@ public class HologramBrowseUI implements ClientWorks.Listener {
         boolean willCreateNew = !(mineWork && serverHasUid(selectedLocal.uid()));
         if (willCreateNew && !Kilagraphdemo.canBypassUploadLimit(Minecraft.getInstance().player)
                 && myServerWorkCount() >= Kilagraphdemo.MAX_WORKS_PER_PLAYER) {
-            Dialog.showNotification("Upload limit reached",
-                    "You can publish at most " + Kilagraphdemo.MAX_WORKS_PER_PLAYER
-                            + " works. Delete one of yours first.", null).show(root);
+            Dialog.showNotification("kilagraphdemo.ui.hologram.dlg.limit.title",
+                    I18n.get("kilagraphdemo.ui.hologram.dlg.limit.body", Kilagraphdemo.MAX_WORKS_PER_PLAYER), null).show(root);
             return;
         }
 
@@ -546,9 +563,10 @@ public class HologramBrowseUI implements ClientWorks.Listener {
             TextureBundler.Result result = TextureBundler.rewriteForUpload(
                     toUpload, toUpload.meta().uid(), new LocalShaderFunctions());
             if (result.tooLarge()) {
-                Dialog.showNotification("Upload too large",
-                        "Bundled textures are " + (result.totalBytes() / (1024 * 1024) + 1)
-                                + " MB (max " + (TextureBundler.MAX_TOTAL_BYTES / (1024 * 1024)) + " MB).",
+                Dialog.showNotification("kilagraphdemo.ui.hologram.dlg.too_large.title",
+                        I18n.get("kilagraphdemo.ui.hologram.dlg.tex_too_large.body",
+                                result.totalBytes() / (1024 * 1024) + 1,
+                                TextureBundler.MAX_TOTAL_BYTES / (1024 * 1024)),
                         null).show(root);
                 return;
             }
@@ -556,17 +574,18 @@ public class HologramBrowseUI implements ClientWorks.Listener {
             // Then bundle a custom OBJ model (if any), rewriting its location under this upload's uid.
             ModelBundler.Result modelResult = ModelBundler.rewriteForUpload(uploadPkg, toUpload.meta().uid());
             if (modelResult.tooLarge()) {
-                Dialog.showNotification("Upload too large",
-                        "Bundled model is " + (modelResult.totalBytes() / (1024 * 1024) + 1)
-                                + " MB (max " + (ModelBundler.MAX_MODEL_BYTES / (1024 * 1024)) + " MB).",
+                Dialog.showNotification("kilagraphdemo.ui.hologram.dlg.too_large.title",
+                        I18n.get("kilagraphdemo.ui.hologram.dlg.model_too_large.body",
+                                modelResult.totalBytes() / (1024 * 1024) + 1,
+                                ModelBundler.MAX_MODEL_BYTES / (1024 * 1024)),
                         null).show(root);
                 return;
             }
             if (modelResult.pkg() != null) uploadPkg = modelResult.pkg();
-            Dialog.showNotification("Uploaded",
-                    "Bundled " + uploadPkg.textures().size() + " texture(s), "
-                            + uploadPkg.models().size() + " model(s), "
-                            + ((result.totalBytes() + modelResult.totalBytes()) / 1024) + " KB.", null).show(root);
+            Dialog.showNotification("kilagraphdemo.ui.hologram.dlg.uploaded.title",
+                    I18n.get("kilagraphdemo.ui.hologram.dlg.uploaded.body",
+                            uploadPkg.textures().size(), uploadPkg.models().size(),
+                            (result.totalBytes() + modelResult.totalBytes()) / 1024), null).show(root);
             ClientWorks.upload(uploadPkg);
         });
     }

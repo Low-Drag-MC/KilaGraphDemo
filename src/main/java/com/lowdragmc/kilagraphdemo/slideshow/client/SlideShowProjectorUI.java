@@ -25,6 +25,7 @@ import com.lowdragmc.lowdraglib2.gui.ui.event.UIEvents;
 import dev.vfyjxf.taffy.style.FlexDirection;
 import lombok.Getter;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.resources.language.I18n;
 import net.minecraft.core.GlobalPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.permissions.Permissions;
@@ -93,10 +94,11 @@ public class SlideShowProjectorUI implements ClientWorks.Listener {
 
         UIElement left = new UIElement();
         left.getLayout().flexDirection(FlexDirection.COLUMN).heightPercent(100).width(160).gapAll(2);
-        left.addChild(sectionLabel("Local works"));
-        left.addChild(new Button().setText("New").setOnClick(e -> onNew()));
+        left.addChild(sectionLabel("kilagraphdemo.ui.projector.section_local"));
+        left.addChild(new Button().setText("kilagraphdemo.ui.projector.new").setOnClick(e -> onNew())
+                .style(s -> s.appendTooltipsString("kilagraphdemo.ui.projector.new.tooltip")));
         left.addChild(listView(localListContainer));
-        left.addChild(sectionLabel("Server works"));
+        left.addChild(sectionLabel("kilagraphdemo.ui.projector.section_server"));
         left.addChild(listView(serverListContainer));
 
         UIElement right = new UIElement();
@@ -116,9 +118,9 @@ public class SlideShowProjectorUI implements ClientWorks.Listener {
         refreshDetail();
     }
 
-    private Label sectionLabel(String text) {
+    private Label sectionLabel(String key) {
         Label l = new Label();
-        l.setText(Component.literal(text));
+        l.setText(Component.translatable(key));
         l.getLayout().height(9);
         return l;
     }
@@ -166,7 +168,8 @@ public class SlideShowProjectorUI implements ClientWorks.Listener {
     private UIElement createRow(String text, String uid, Runnable onClick) {
         boolean inUse = uid.equals(currentUid);
         Label name = new Label();
-        name.setText(Component.literal(text + (inUse ? "  (in use)" : "")));
+        name.setText(Component.literal(text).append(inUse
+                ? Component.translatable("kilagraphdemo.ui.projector.in_use") : Component.empty()));
         name.textStyle(style -> {
             style.textWrap(TextWrap.HOVER_ROLL).textAlignVertical(Vertical.CENTER);
             if (inUse) style.textColor(ColorPattern.GREEN.color);
@@ -218,44 +221,54 @@ public class SlideShowProjectorUI implements ClientWorks.Listener {
         } else if (selectedServer != null) {
             buildServerDetail(selectedServer);
         } else {
-            metaLabels.addChild(metaLabel("Select a work, or create a New one", ColorPattern.WHITE.color));
+            metaLabels.addChild(metaLabel(Component.translatable("kilagraphdemo.ui.projector.select_work"), ColorPattern.WHITE.color));
         }
 
         // "Clear" is always available when this projector currently uses a graph.
         if (!currentUid.isEmpty()) {
-            actions.addChild(new Button().setText("Clear from projector").setOnClick(e -> useOnProjector("")));
+            actions.addChild(new Button().setText("kilagraphdemo.ui.projector.clear").setOnClick(e -> useOnProjector(""))
+                    .style(s -> s.appendTooltipsString("kilagraphdemo.ui.projector.clear.tooltip")));
         }
     }
 
     private void buildLocalDetail(WorkMeta m) {
-        metaLabels.addChild(metaLabel("Local work", ColorPattern.YELLOW.color));
+        metaLabels.addChild(metaLabel(Component.translatable("kilagraphdemo.ui.projector.local_work"), ColorPattern.YELLOW.color));
         titleField.setText(m.title());
-        body.addChild(sectionLabel("Title:"));
+        body.addChild(sectionLabel("kilagraphdemo.ui.projector.title_label"));
         body.addChild(titleField);
         descriptionField.setLines(Arrays.asList(m.description().split("\n", -1)));
-        body.addChild(sectionLabel("Description:"));
+        body.addChild(sectionLabel("kilagraphdemo.ui.projector.description"));
         body.addChild(descriptionField);
 
-        actions.addChild(new Button().setText("Edit").setOnClick(e -> onEdit(m)));
-        actions.addChild(new Button().setText("Save meta").setOnClick(e -> onSaveMeta(m)));
-        actions.addChild(new Button().setText("Upload").setOnClick(e -> onUpload(m)));
+        actions.addChild(new Button().setText("kilagraphdemo.ui.projector.edit").setOnClick(e -> onEdit(m))
+                .style(s -> s.appendTooltipsString("kilagraphdemo.ui.projector.edit.tooltip")));
+        actions.addChild(new Button().setText("kilagraphdemo.ui.projector.save_meta").setOnClick(e -> onSaveMeta(m))
+                .style(s -> s.appendTooltipsString("kilagraphdemo.ui.projector.save_meta.tooltip")));
+        actions.addChild(new Button().setText("kilagraphdemo.ui.projector.upload").setOnClick(e -> onUpload(m))
+                .style(s -> s.appendTooltipsString("kilagraphdemo.ui.projector.upload.tooltip")));
         if (serverHasUid(m.uid())) {
-            actions.addChild(new Button().setText("Use on this projector").setOnClick(e -> useOnProjector(m.uid())));
+            actions.addChild(new Button().setText("kilagraphdemo.ui.projector.use").setOnClick(e -> useOnProjector(m.uid()))
+                    .style(s -> s.appendTooltipsString("kilagraphdemo.ui.projector.use.tooltip")));
         }
-        actions.addChild(new Button().setText("Delete (local)").setOnClick(e -> onDeleteLocal(m.uid())));
+        actions.addChild(new Button().setText("kilagraphdemo.ui.projector.delete_local").setOnClick(e -> onDeleteLocal(m.uid()))
+                .style(s -> s.appendTooltipsString("kilagraphdemo.ui.projector.delete_local.tooltip")));
     }
 
     private void buildServerDetail(ServerWorkEntry entry) {
         WorkMeta m = entry.meta();
-        metaLabels.addChild(metaLabel(m.title(), ColorPattern.YELLOW.color));
-        metaLabels.addChild(metaLabel("by " + (m.authorName().isEmpty() ? "?" : m.authorName()), ColorPattern.CYAN.color));
+        metaLabels.addChild(metaLabel(Component.literal(m.title()), ColorPattern.YELLOW.color));
+        metaLabels.addChild(metaLabel(Component.translatable("kilagraphdemo.ui.projector.meta_by",
+                m.authorName().isEmpty() ? "?" : m.authorName()), ColorPattern.CYAN.color));
         body.addChild(descriptionScroller(m.description()));
 
-        actions.addChild(new Button().setText("Use on this projector").setOnClick(e -> useOnProjector(m.uid())));
-        actions.addChild(new Button().setText("Download (edit locally)").setOnClick(e -> ClientWorks.download(m.uid())));
+        actions.addChild(new Button().setText("kilagraphdemo.ui.projector.use").setOnClick(e -> useOnProjector(m.uid()))
+                .style(s -> s.appendTooltipsString("kilagraphdemo.ui.projector.use.tooltip")));
+        actions.addChild(new Button().setText("kilagraphdemo.ui.projector.download").setOnClick(e -> ClientWorks.download(m.uid()))
+                .style(s -> s.appendTooltipsString("kilagraphdemo.ui.projector.download.tooltip")));
         // Author may delete their own; Creative/Op may delete anyone's.
         if (isMineServer(m) || canEdit()) {
-            actions.addChild(new Button().setText("Delete from server").setOnClick(e -> onDeleteServer(m.uid())));
+            actions.addChild(new Button().setText("kilagraphdemo.ui.projector.delete_server").setOnClick(e -> onDeleteServer(m.uid()))
+                    .style(s -> s.appendTooltipsString("kilagraphdemo.ui.projector.delete_server.tooltip")));
         }
     }
 
@@ -277,9 +290,9 @@ public class SlideShowProjectorUI implements ClientWorks.Listener {
         refreshDetail();
     }
 
-    private Label metaLabel(String text, int color) {
+    private Label metaLabel(Component text, int color) {
         Label l = new Label();
-        l.setText(Component.literal(text));
+        l.setText(text);
         l.textStyle(style -> style.textColor(color).textShadow(false)
                 .textWrap(TextWrap.HOVER_ROLL).textAlignVertical(Vertical.CENTER));
         l.setOverflowVisible(false);
@@ -291,7 +304,7 @@ public class SlideShowProjectorUI implements ClientWorks.Listener {
         ScrollerView sv = new ScrollerView();
         sv.getLayout().widthPercent(100).height(60);
         Label l = new Label();
-        l.setText(Component.literal(text.isEmpty() ? "(no description)" : text));
+        l.setText(text.isEmpty() ? Component.translatable("kilagraphdemo.ui.common.no_description") : Component.literal(text));
         l.textStyle(style -> style.textWrap(TextWrap.WRAP).adaptiveHeight(true));
         l.getLayout().widthPercent(100);
         sv.addScrollViewChild(l);
@@ -339,8 +352,8 @@ public class SlideShowProjectorUI implements ClientWorks.Listener {
         String title = titleField.getValue();
         String desc = String.join("\n", descriptionField.getValue());
         if (desc.isBlank()) {
-            Dialog.showNotification("Description required",
-                    "Please write a description before uploading.", null).show(root);
+            Dialog.showNotification("kilagraphdemo.ui.projector.dlg.desc_required.title",
+                    "kilagraphdemo.ui.projector.dlg.desc_required.body", null).show(root);
             return;
         }
         String myUuid = player.getUUID().toString();
@@ -348,8 +361,8 @@ public class SlideShowProjectorUI implements ClientWorks.Listener {
         boolean willCreateNew = !(mineWork && serverHasUid(meta.uid()));
         if (willCreateNew && !Kilagraphdemo.canBypassUploadLimit(player)
                 && myServerWorkCount() >= Kilagraphdemo.MAX_WORKS_PER_PLAYER) {
-            Dialog.showNotification("Upload limit reached",
-                    "You can publish at most " + Kilagraphdemo.MAX_WORKS_PER_PLAYER + " works.", null).show(root);
+            Dialog.showNotification("kilagraphdemo.ui.projector.dlg.limit.title",
+                    I18n.get("kilagraphdemo.ui.projector.dlg.limit.body", Kilagraphdemo.MAX_WORKS_PER_PLAYER), null).show(root);
             return;
         }
         String finalTitle = title.isBlank() ? "Untitled" : title;
@@ -365,7 +378,8 @@ public class SlideShowProjectorUI implements ClientWorks.Listener {
             refreshLocalList();
             onSelectLocal(toUpload.meta());
             ClientWorks.upload(toUpload);
-            Dialog.showNotification("Uploaded", "Shared to the server.", null).show(root);
+            Dialog.showNotification("kilagraphdemo.ui.projector.dlg.uploaded.title",
+                    "kilagraphdemo.ui.projector.dlg.uploaded.body", null).show(root);
         });
     }
 

@@ -285,9 +285,9 @@ public final class DroneRankingClientUI {
         String author = stringSync(sync.authorName());
         int score = intSync(sync.score());
         if (author.isEmpty()) {
-            header.setText(Component.literal(String.format("No entry at rank #%d", rank)));
+            header.setText(Component.translatable("kilagraphdemo.ui.drone_ranking.no_entry", rank));
         } else {
-            header.setText(Component.literal(String.format("#%d  %s  ·  score %d", rank, author, score)));
+            header.setText(Component.translatable("kilagraphdemo.ui.drone_ranking.header", rank, author, score));
         }
     }
 

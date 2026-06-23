@@ -31,7 +31,7 @@ public final class PlacementDialog {
                             Consumer<HologramPlacement> onChange, @Nullable Consumer<HologramPlacement> onApply) {
         HologramPlacement[] cur = {initial};
         Dialog dialog = new Dialog();
-        dialog.setTitle("Placement");
+        dialog.setTitle("kilagraphdemo.ui.editor.placement_title");
 
         UIElement content = new UIElement();
         content.getLayout().flexDirection(FlexDirection.COLUMN).width(180).gapAll(2);
@@ -39,7 +39,7 @@ public final class PlacementDialog {
                 () -> cur[0].transform(),
                 t -> { cur[0] = cur[0].withTransform(t); onChange.accept(cur[0]); }));
 
-        NumberConfigurator spin = new NumberConfigurator("Spin /tick",
+        NumberConfigurator spin = new NumberConfigurator("kilagraphdemo.ui.editor.spin",
                 () -> cur[0].spinDegreesPerTick(),
                 n -> { cur[0] = cur[0].withSpin(n.floatValue()); onChange.accept(cur[0]); },
                 initial.spinDegreesPerTick(), false);
@@ -51,16 +51,16 @@ public final class PlacementDialog {
         dialog.addContent(content);
         // Reset to defaults. The configurators read their value once, so reopen the dialog (rebuilt from
         // DEFAULT) rather than refreshing each field in place; the live onChange is fired too.
-        dialog.addButton(new Button().setText("Reset").setOnClick(e -> {
+        dialog.addButton(new Button().setText("kilagraphdemo.ui.editor.reset").setOnClick(e -> {
             onChange.accept(HologramPlacement.DEFAULT);
             dialog.close();
             open(anchor, HologramPlacement.DEFAULT, onChange, onApply);
-        }));
+        }).style(s -> s.appendTooltipsString("kilagraphdemo.ui.editor.reset.tooltip")));
         if (onApply != null) {
-            dialog.addButton(new Button().setText("Apply").setOnClick(e -> {
+            dialog.addButton(new Button().setText("kilagraphdemo.ui.editor.apply").setOnClick(e -> {
                 onApply.accept(cur[0]);
                 dialog.close();
-            }));
+            }).style(s -> s.appendTooltipsString("kilagraphdemo.ui.editor.apply.tooltip")));
         }
         dialog.setClickOutsideClose(true);
         dialog.overlay.layout(LayoutStyle::widthAuto);

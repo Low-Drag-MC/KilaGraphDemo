@@ -51,7 +51,7 @@ public abstract class ProjectorScreenMixin extends AbstractContainerScreen<Proje
                                 .left(this.imageWidth + 4)
                                 .top(4))
                         .style(s -> s.background(SpriteTexture.of("kilagraphdemo:textures/gui/kg_button.png"))
-                                .tooltips("KilaGraph Shader"))
+                                .tooltips("kilagraphdemo.ui.projector.kg_shader_button"))
                         .addEventListener(UIEvents.CLICK, e -> {
                             Level level = player.level();
                             SlideShowScreens.openBrowse(level, pos);

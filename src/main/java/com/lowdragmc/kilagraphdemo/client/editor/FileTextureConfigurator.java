@@ -16,7 +16,7 @@ import com.lowdragmc.lowdraglib2.gui.ui.UIElement;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Button;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Dialog;
 import com.lowdragmc.lowdraglib2.nodegraphtookit.api.IFieldValueConfigurable;
-import net.minecraft.network.chat.Component;
+import net.minecraft.client.resources.language.I18n;
 import net.minecraft.resources.Identifier;
 
 import java.io.File;
@@ -41,8 +41,9 @@ public final class FileTextureConfigurator {
 
         // File picker button → fills in a kilagraphdemo:textures/… location (CUSTOM mode).
         var fileRow = new Configurator("kg.filetexture.file");
-        var button = new Button().setText("Choose PNG…");
+        var button = new Button().setText("kilagraphdemo.ui.editor.choose_png");
         button.getLayout().flexGrow(1).height(14);
+        button.style(s -> s.appendTooltipsString("kilagraphdemo.ui.editor.choose_png.tooltip"));
         button.setOnClick(e -> openPicker(vc, get, button));
         fileRow.inlineContainer.addChild(button);
 
@@ -92,13 +93,13 @@ public final class FileTextureConfigurator {
     private static void openPicker(IFieldValueConfigurable vc, Supplier<Sampler2DValue> get, UIElement anchor) {
         File assets = Kilagraphdemo.getAssetsDir();
         File texturesDir = new File(assets, "textures");
-        Dialog.showFileDialog("Choose PNG", texturesDir, true, Dialog.suffixFilter(".png"), file -> {
+        Dialog.showFileDialog("kilagraphdemo.ui.editor.choose_png_title", texturesDir, true, Dialog.suffixFilter(".png"), file -> {
             if (file == null) return;
             String rel = assets.toPath().relativize(file.toPath()).toString().replace('\\', '/');
             String location = Kilagraphdemo.MODID + ":" + rel;
             if (Identifier.tryParse(location) == null) {
-                Dialog.showNotification("Invalid texture name",
-                        "Use lowercase a-z 0-9 / . _ - in the file path: " + rel, null).show(anchor);
+                Dialog.showNotification("kilagraphdemo.ui.editor.dlg.invalid_texture.title",
+                        I18n.get("kilagraphdemo.ui.editor.dlg.invalid_texture.body", rel), null).show(anchor);
                 return;
             }
             Sampler2DValue c = get.get();

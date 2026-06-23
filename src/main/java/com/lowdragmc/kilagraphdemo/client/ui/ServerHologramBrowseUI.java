@@ -106,12 +106,13 @@ public class ServerHologramBrowseUI implements ClientWorks.Listener {
         // Left column: a sort row above the server list.
         UIElement left = new UIElement();
         left.getLayout().flexDirection(FlexDirection.COLUMN).heightPercent(100).width(150).gapAll(2);
-        left.addChild(sectionLabel("Server works"));
+        left.addChild(sectionLabel("kilagraphdemo.ui.server_hologram.section"));
         left.addChild(sortRow());
         left.addChild(listView(serverListContainer));
         // Per-block placement (transform + spin) — op/creative only; persisted + synced on Apply.
         if (canEdit()) {
-            left.addChild(new Button().setText("Placement…").setOnClick(e -> onPlacement()));
+            left.addChild(new Button().setText("kilagraphdemo.ui.server_hologram.placement").setOnClick(e -> onPlacement())
+                    .style(s -> s.appendTooltipsString("kilagraphdemo.ui.server_hologram.placement.tooltip")));
         }
 
         // Right column: meta header row (labels + avatar), body (description), action buttons.
@@ -142,15 +143,19 @@ public class ServerHologramBrowseUI implements ClientWorks.Listener {
     private UIElement sortRow() {
         UIElement row = new UIElement();
         row.getLayout().flexDirection(FlexDirection.ROW).widthPercent(100).gapAll(1).height(12);
-        row.addChild(sortButton("Liked", SortMode.MOST_LIKED));
-        row.addChild(sortButton("New", SortMode.NEWEST));
-        row.addChild(sortButton("Old", SortMode.OLDEST));
+        row.addChild(sortButton("kilagraphdemo.ui.server_hologram.sort_liked",
+                "kilagraphdemo.ui.server_hologram.sort_liked.tooltip", SortMode.MOST_LIKED));
+        row.addChild(sortButton("kilagraphdemo.ui.server_hologram.sort_new",
+                "kilagraphdemo.ui.server_hologram.sort_new.tooltip", SortMode.NEWEST));
+        row.addChild(sortButton("kilagraphdemo.ui.server_hologram.sort_old",
+                "kilagraphdemo.ui.server_hologram.sort_old.tooltip", SortMode.OLDEST));
         return row;
     }
 
-    private Button sortButton(String label, SortMode mode) {
-        Button button = new Button().setText(label);
+    private Button sortButton(String labelKey, String tooltipKey, SortMode mode) {
+        Button button = new Button().setText(labelKey);
         button.getLayout().flex(1).heightPercent(100);
+        button.style(s -> s.appendTooltipsString(tooltipKey));
         button.setOnClick(e -> {
             sortMode = mode;
             refreshServerList();
@@ -158,9 +163,9 @@ public class ServerHologramBrowseUI implements ClientWorks.Listener {
         return button;
     }
 
-    private Label sectionLabel(String text) {
+    private Label sectionLabel(String key) {
         Label l = new Label();
-        l.setText(Component.literal(text));
+        l.setText(Component.translatable(key));
         l.getLayout().height(9);
         return l;
     }
@@ -201,7 +206,8 @@ public class ServerHologramBrowseUI implements ClientWorks.Listener {
 
         String tag = "(" + (m.authorName().isEmpty() ? "?" : m.authorName()) + ")";
         Label name = new Label();
-        name.setText(Component.literal(m.title() + " " + tag + (displayed ? "  (displayed)" : "")));
+        name.setText(Component.literal(m.title() + " " + tag).append(displayed
+                ? Component.translatable("kilagraphdemo.ui.server_hologram.displayed") : Component.empty()));
         name.textStyle(style -> {
             style.textWrap(TextWrap.HOVER_ROLL).textAlignVertical(Vertical.CENTER);
             if (displayed) style.textColor(ColorPattern.GREEN.color);
@@ -245,15 +251,15 @@ public class ServerHologramBrowseUI implements ClientWorks.Listener {
         body.clearAllChildren();
         actions.clearAllChildren();
         if (selectedServer == null) {
-            metaLabels.addChild(metaLabel("Select a work to display", ColorPattern.WHITE.color));
+            metaLabels.addChild(metaLabel(Component.translatable("kilagraphdemo.ui.server_hologram.select_work"), ColorPattern.WHITE.color));
             return;
         }
         buildServerDetail(selectedServer);
     }
 
-    private Label metaLabel(String text, int color) {
+    private Label metaLabel(Component text, int color) {
         Label l = new Label();
-        l.setText(Component.literal(text));
+        l.setText(text);
         l.textStyle(style -> style.textColor(color).textShadow(false)
                 .textWrap(TextWrap.HOVER_ROLL).textAlignVertical(Vertical.CENTER));
         l.setOverflowVisible(false);
@@ -265,12 +271,13 @@ public class ServerHologramBrowseUI implements ClientWorks.Listener {
         WorkMeta m = entry.meta();
         boolean displayed = m.uid().equals(displayedUid);
 
-        metaLabels.addChild(metaLabel(m.title(), ColorPattern.YELLOW.color));
-        metaLabels.addChild(metaLabel("by " + (m.authorName().isEmpty() ? "?" : m.authorName()), ColorPattern.CYAN.color));
-        metaLabels.addChild(metaLabel("first: " + date(m.firstUploadTime()), ColorPattern.GRAY.color));
-        metaLabels.addChild(metaLabel("updated: " + date(m.lastUpdateTime()), ColorPattern.GRAY.color));
-        metaLabels.addChild(metaLabel("likes: " + entry.likeCount(), ColorPattern.PINK.color));
-        if (displayed) metaLabels.addChild(metaLabel("(currently displayed)", ColorPattern.GREEN.color));
+        metaLabels.addChild(metaLabel(Component.literal(m.title()), ColorPattern.YELLOW.color));
+        metaLabels.addChild(metaLabel(Component.translatable("kilagraphdemo.ui.server_hologram.meta_by",
+                m.authorName().isEmpty() ? "?" : m.authorName()), ColorPattern.CYAN.color));
+        metaLabels.addChild(metaLabel(Component.translatable("kilagraphdemo.ui.server_hologram.meta_first", date(m.firstUploadTime())), ColorPattern.GRAY.color));
+        metaLabels.addChild(metaLabel(Component.translatable("kilagraphdemo.ui.server_hologram.meta_updated", date(m.lastUpdateTime())), ColorPattern.GRAY.color));
+        metaLabels.addChild(metaLabel(Component.translatable("kilagraphdemo.ui.server_hologram.meta_likes", entry.likeCount()), ColorPattern.PINK.color));
+        if (displayed) metaLabels.addChild(metaLabel(Component.translatable("kilagraphdemo.ui.server_hologram.currently_displayed"), ColorPattern.GREEN.color));
 
         if (!m.authorUuid().isEmpty()) {
             try {
@@ -284,14 +291,17 @@ public class ServerHologramBrowseUI implements ClientWorks.Listener {
         body.addChild(descriptionScroller(m.description()));
 
         // Like is available to anyone; Set/Clear only to ops/creative.
-        actions.addChild(new Button().setText(entry.likedByMe() ? "Unlike" : "Like")
-                .setOnClick(e -> ClientWorks.setLike(m.uid(), !entry.likedByMe())));
+        actions.addChild(new Button().setText(entry.likedByMe() ? "kilagraphdemo.ui.common.unlike" : "kilagraphdemo.ui.common.like")
+                .setOnClick(e -> ClientWorks.setLike(m.uid(), !entry.likedByMe()))
+                .style(s -> s.appendTooltipsString("kilagraphdemo.ui.common.like.tooltip")));
         if (canEdit()) {
             if (!displayed) {
-                actions.addChild(new Button().setText("Set as display").setOnClick(e -> setDisplay(m.uid())));
+                actions.addChild(new Button().setText("kilagraphdemo.ui.server_hologram.set_display").setOnClick(e -> setDisplay(m.uid()))
+                        .style(s -> s.appendTooltipsString("kilagraphdemo.ui.server_hologram.set_display.tooltip")));
             }
             if (!displayedUid.isEmpty()) {
-                actions.addChild(new Button().setText("Clear display").setOnClick(e -> setDisplay("")));
+                actions.addChild(new Button().setText("kilagraphdemo.ui.server_hologram.clear_display").setOnClick(e -> setDisplay(""))
+                        .style(s -> s.appendTooltipsString("kilagraphdemo.ui.server_hologram.clear_display.tooltip")));
             }
         }
     }
@@ -300,7 +310,7 @@ public class ServerHologramBrowseUI implements ClientWorks.Listener {
         ScrollerView sv = new ScrollerView();
         sv.getLayout().widthPercent(100).height(40);
         Label l = new Label();
-        l.setText(Component.literal(text.isEmpty() ? "(no description)" : text));
+        l.setText(text.isEmpty() ? Component.translatable("kilagraphdemo.ui.common.no_description") : Component.literal(text));
         l.textStyle(style -> style.textWrap(TextWrap.WRAP).adaptiveHeight(true));
         l.getLayout().widthPercent(100);
         sv.addScrollViewChild(l);

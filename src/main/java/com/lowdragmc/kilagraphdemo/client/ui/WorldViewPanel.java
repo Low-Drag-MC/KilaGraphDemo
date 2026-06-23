@@ -20,7 +20,7 @@ import org.joml.Matrix3x2f;
 public class WorldViewPanel extends View {
 
     public WorldViewPanel() {
-        setName("World");
+        setName("kilagraphdemo.ui.editor.view_world");
         getLayout().widthPercent(100).heightPercent(100);
     }
 

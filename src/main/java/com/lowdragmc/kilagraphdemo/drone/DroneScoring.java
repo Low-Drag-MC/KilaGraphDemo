@@ -118,9 +118,8 @@ public final class DroneScoring {
                     DroneLeaderboard.get(server.overworld()).recordScore(owner, name, score, TICK_BUDGET);
                     ServerPlayer player = server.getPlayerList().getPlayer(owner);
                     if (player != null) {
-                        player.sendSystemMessage(Component.literal(
-                                "Drone solution scored: " + score + " points (median of "
-                                        + SCORING_SEEDS.length + " runs)."));
+                        player.sendSystemMessage(Component.translatable(
+                                "message.kilagraphdemo.drone_scored", score, SCORING_SEEDS.length));
                     }
                 });
             } catch (Throwable e) {

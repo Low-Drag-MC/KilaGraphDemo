@@ -11,6 +11,7 @@ import com.lowdragmc.kilagraphdemo.block.HologramBlock;
 import com.lowdragmc.kilagraphdemo.graph.ModelSelection;
 import com.lowdragmc.kilagraphdemo.graph.ModelTransform;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.resources.language.I18n;
 import net.minecraft.core.Direction;
 import net.minecraft.core.GlobalPos;
 import net.minecraft.world.phys.AABB;
@@ -41,10 +42,10 @@ import java.util.function.Consumer;
  */
 public class ModelSettingsView extends View {
 
-    private static final String LBL_CUBE = "Cube";
-    private static final String LBL_SPHERE = "Sphere";
-    private static final String LBL_QUAD = "Quad";
-    private static final String LBL_CUSTOM = "Custom (OBJ)";
+    private static final String LBL_CUBE = "kilagraphdemo.ui.editor.kind_cube";
+    private static final String LBL_SPHERE = "kilagraphdemo.ui.editor.kind_sphere";
+    private static final String LBL_QUAD = "kilagraphdemo.ui.editor.kind_quad";
+    private static final String LBL_CUSTOM = "kilagraphdemo.ui.editor.kind_custom";
 
     private final GlobalPos blockPos;
     private final HologramDisplay display;
@@ -60,7 +61,7 @@ public class ModelSettingsView extends View {
         this.display = display;
         this.onChanged = onChanged;
         this.model = initial;
-        setName("Model");
+        setName("kilagraphdemo.ui.editor.view_model");
         getLayout().flexDirection(FlexDirection.COLUMN).widthPercent(100).heightPercent(100).gapAll(2).paddingAll(3);
 
         info.textStyle(style -> style.adaptiveHeight(true));
@@ -74,7 +75,7 @@ public class ModelSettingsView extends View {
 
         // Render radius applies to every model kind (drives the renderer's cull box), so it lives outside the
         // kind-specific body and is always visible. A "Display AABB" button next to it previews the cull box.
-        NumberConfigurator radius = new NumberConfigurator("Radius",
+        NumberConfigurator radius = new NumberConfigurator("kilagraphdemo.ui.editor.radius",
                 () -> model.renderRadius(),
                 n -> { model = model.withRenderRadius(n.floatValue()); apply(); },
                 model.renderRadius(), false);
@@ -83,11 +84,11 @@ public class ModelSettingsView extends View {
         radius.setWheel(0.5f);
         radius.getLayout().flex(1);
 
-        Button aabb = new Button().setText("AABB");
+        Button aabb = new Button().setText("kilagraphdemo.ui.editor.aabb");
         aabb.getLayout().width(36).height(14);
         aabb.style(s -> s.appendTooltipsString(
-                "Display the render bounding box (cull box) for the current radius + placement",
-                "as a wireframe in the world for 10s. Click again to refresh the timer."));
+                "kilagraphdemo.ui.editor.aabb.tooltip.0",
+                "kilagraphdemo.ui.editor.aabb.tooltip.1"));
         aabb.setOnClick(e -> showAabb());
 
         UIElement radiusRow = new UIElement();
@@ -135,7 +136,7 @@ public class ModelSettingsView extends View {
     }
 
     private void buildPrimitiveBody() {
-        NumberConfigurator subdiv = new NumberConfigurator("Subdivisions",
+        NumberConfigurator subdiv = new NumberConfigurator("kilagraphdemo.ui.editor.subdivisions",
                 () -> model.subdivisions(),
                 n -> { model = model.withSubdivisions(n.intValue()); apply(); },
                 model.subdivisions(), false);
@@ -146,9 +147,10 @@ public class ModelSettingsView extends View {
     }
 
     private void buildObjBody() {
-        body.addChild(new Button().setText("Import OBJ…").setOnClick(e -> importObj()));
+        body.addChild(new Button().setText("kilagraphdemo.ui.editor.import_obj").setOnClick(e -> importObj())
+                .style(s -> s.appendTooltipsString("kilagraphdemo.ui.editor.import_obj.tooltip")));
 
-        body.addChild(new BooleanConfigurator("Flip UV (V)",
+        body.addChild(new BooleanConfigurator("kilagraphdemo.ui.editor.flip_uv",
                 () -> model.flipV(),
                 b -> { model = model.withFlipV(b); apply(); },
                 false, true));
@@ -179,13 +181,13 @@ public class ModelSettingsView extends View {
     private void importObj() {
         File assets = Kilagraphdemo.getAssetsDir();
         File modelsDir = new File(assets, "models");
-        Dialog.showFileDialog("Import OBJ", modelsDir, true, Dialog.suffixFilter(".obj"), file -> {
+        Dialog.showFileDialog("kilagraphdemo.ui.editor.file_obj_title", modelsDir, true, Dialog.suffixFilter(".obj"), file -> {
             if (file == null) return;
             String rel = assets.toPath().relativize(file.toPath()).toString().replace('\\', '/');
             String location = Kilagraphdemo.MODID + ":" + rel;
             if (Identifier.tryParse(location) == null) {
-                Dialog.showNotification("Invalid model name",
-                        "Use lowercase a-z 0-9 / . _ - in the file path: " + rel, null).show(getModularUI());
+                Dialog.showNotification("kilagraphdemo.ui.editor.dlg.invalid_model.title",
+                        I18n.get("kilagraphdemo.ui.editor.dlg.invalid_model.body", rel), null).show(getModularUI());
                 return;
             }
             model = model.isObj() ? model.withLocation(location) : ModelSelection.obj(location);
@@ -202,7 +204,7 @@ public class ModelSettingsView extends View {
     }
 
     private void refreshInfo() {
-        info.setText(Component.literal("Model: " + model.describe()));
+        info.setText(Component.translatable("kilagraphdemo.ui.editor.model_info", model.describe()));
     }
 
     private static String labelOf(ModelSelection model) {

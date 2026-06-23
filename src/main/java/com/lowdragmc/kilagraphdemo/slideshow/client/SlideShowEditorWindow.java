@@ -58,7 +58,7 @@ public final class SlideShowEditorWindow {
             Button exit = new Button();
             exit.noText().setOnClick(e -> onExit.run());
             exit.getLayout().width(14).heightPercent(100);
-            exit.style(s -> s.appendTooltipsString("Exit (Esc)"));
+            exit.style(s -> s.appendTooltipsString("kilagraphdemo.ui.common.exit.tooltip"));
             UIElement icon = new UIElement().addClass("__white_icon__");
             icon.getLayout().heightPercent(100).setAspectRatio(1);
             icon.style(s -> s.backgroundTexture(Icons.WINDOW_CLOSE));

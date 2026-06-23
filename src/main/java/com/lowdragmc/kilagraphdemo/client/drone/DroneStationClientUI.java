@@ -285,12 +285,12 @@ public final class DroneStationClientUI {
         bar.getLayout().widthPercent(100).flexDirection(FlexDirection.ROW).alignItems(AlignItems.CENTER).gapAll(2).paddingAll(2);
 
         if (owner) {
-            bar.addChild(button("Upload", this::upload));
-            bar.addChild(button("Run", this::run));
-            bar.addChild(button("Pause", () -> control(C2SDroneControl.Action.PAUSE)));
-            bar.addChild(button("Resume", () -> control(C2SDroneControl.Action.RESUME)));
-            bar.addChild(button("Step", this::step));
-            bar.addChild(button("Stop", () -> control(C2SDroneControl.Action.STOP)));
+            bar.addChild(button("kilagraphdemo.ui.drone_station.upload", "kilagraphdemo.ui.drone_station.upload.tooltip", this::upload));
+            bar.addChild(button("kilagraphdemo.ui.drone_station.run", "kilagraphdemo.ui.drone_station.run.tooltip", this::run));
+            bar.addChild(button("kilagraphdemo.ui.drone_station.pause", "kilagraphdemo.ui.drone_station.pause.tooltip", () -> control(C2SDroneControl.Action.PAUSE)));
+            bar.addChild(button("kilagraphdemo.ui.drone_station.resume", "kilagraphdemo.ui.drone_station.resume.tooltip", () -> control(C2SDroneControl.Action.RESUME)));
+            bar.addChild(button("kilagraphdemo.ui.drone_station.step", "kilagraphdemo.ui.drone_station.step.tooltip", this::step));
+            bar.addChild(button("kilagraphdemo.ui.drone_station.stop", "kilagraphdemo.ui.drone_station.stop.tooltip", () -> control(C2SDroneControl.Action.STOP)));
         }
         status.getTextStyle().textAlignVertical(Vertical.CENTER).textShadow(false);
         status.getLayout().flex(1).heightPercent(100);
@@ -299,9 +299,10 @@ public final class DroneStationClientUI {
         return bar;
     }
 
-    private Button button(String label, Runnable onClick) {
-        Button b = new Button().setText(label);
+    private Button button(String labelKey, String tooltipKey, Runnable onClick) {
+        Button b = new Button().setText(labelKey);
         b.getLayout().height(12).width(38);
+        b.style(s -> s.appendTooltipsString(tooltipKey));
         b.setOnClick(e -> onClick.run());
         return b;
     }
@@ -455,8 +456,8 @@ public final class DroneStationClientUI {
             case FINISHED -> ColorPattern.CYAN.color;
             default -> ColorPattern.BLACK.color;
         };
-        status.setText(Component.literal(String.format("%s  ·  tick %d  ·  score %d",
-                state, intSync(sync.runTick()), intSync(sync.score()))));
+        status.setText(Component.translatable("kilagraphdemo.ui.drone_station.status",
+                state.toString(), intSync(sync.runTick()), intSync(sync.score())));
         status.textStyle(s -> s.textColor(color));
     }
 

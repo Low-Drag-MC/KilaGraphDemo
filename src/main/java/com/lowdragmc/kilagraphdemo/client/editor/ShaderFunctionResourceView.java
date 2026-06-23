@@ -32,14 +32,15 @@ public class ShaderFunctionResourceView extends View {
     /** @param openInWindow opens an edited Shader-Function's editor view in the host window. */
     public ShaderFunctionResourceView(LocalShaderFunctions store, Consumer<View> openInWindow) {
         this.store = store;
-        setName("Shader Functions");
+        setName("kilagraphdemo.ui.editor.view_shader_functions");
         getLayout().flexDirection(FlexDirection.COLUMN).widthPercent(100).heightPercent(100).gapAll(2).paddingAll(2);
 
         container = new Container(openInWindow, store);
         container.getLayout().flex(1).widthPercent(100);
         container.reloadResourceContainer();
 
-        addChild(new Button().setText("New Shader Function").setOnClick(e -> container.addNewDefault()));
+        addChild(new Button().setText("kilagraphdemo.ui.editor.new_shader").setOnClick(e -> container.addNewDefault())
+                .style(s -> s.appendTooltipsString("kilagraphdemo.ui.editor.new_shader.tooltip")));
         addChild(container);
     }
 
