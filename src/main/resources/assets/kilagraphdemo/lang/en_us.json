@@ -5,6 +5,8 @@
   "block.kilagraphdemo.fertile_soil": "Fertile Soil",
   "block.kilagraphdemo.drone_station": "Drone Programming Station",
   "block.kilagraphdemo.drone_ranking": "Drone Ranking Display",
+  "block.kilagraphdemo.drone_scoreboard": "Drone Scoreboard",
+  "block.kilagraphdemo.work_scoreboard": "Hologram Likes Scoreboard",
   "message.kilagraphdemo.drone_no_field": "No fertile soil beneath the station — place Fertile Soil directly below it.",
 
   "drone.move": "Move",

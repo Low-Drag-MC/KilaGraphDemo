@@ -154,6 +154,7 @@ public class WorksSavedData extends SavedData {
         toStore.put("meta", authoritative.toTag());
         writePayload(uid, toStore);
         saveIndex();
+        ScoreboardRegistry.notify(ScoreboardRegistry.Channel.WORK);
         return new UploadResult(status, authoritative);
     }
 
@@ -185,6 +186,7 @@ public class WorksSavedData extends SavedData {
             LOGGER.error("[KilaGraphDemo] failed to delete payload {}", uid, e);
         }
         saveIndex();
+        ScoreboardRegistry.notify(ScoreboardRegistry.Channel.WORK);
         return true;
     }
 
@@ -198,6 +200,7 @@ public class WorksSavedData extends SavedData {
             set.remove(who);
         }
         saveIndex();
+        ScoreboardRegistry.notify(ScoreboardRegistry.Channel.WORK);
     }
 
     // ---- persistence (our own files) ---------------------------------------------------------

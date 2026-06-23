@@ -131,6 +131,7 @@ public class DroneLeaderboard extends SavedData {
         long ticks = prev == null ? 0L : prev.ticks();
         entries.put(player, new Entry(name, score, ticks, System.currentTimeMillis(), program.copy()));
         save();
+        ScoreboardRegistry.notify(ScoreboardRegistry.Channel.DRONE);
     }
 
     /** Overwrite a player's score with the freshly computed result (latest-overwrites policy). */
@@ -139,6 +140,7 @@ public class DroneLeaderboard extends SavedData {
         CompoundTag program = prev == null ? new CompoundTag() : prev.program();
         entries.put(player, new Entry(name, score, ticks, System.currentTimeMillis(), program));
         save();
+        ScoreboardRegistry.notify(ScoreboardRegistry.Channel.DRONE);
     }
 
     // ---- persistence (our own file) ----------------------------------------------------------

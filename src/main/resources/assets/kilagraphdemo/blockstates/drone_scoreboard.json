@@ -1,0 +1,8 @@
+{
+    "variants": {
+        "facing=north": { "model": "kilagraphdemo:block/drone_scoreboard" },
+        "facing=south": { "model": "kilagraphdemo:block/drone_scoreboard", "y": 180 },
+        "facing=west":  { "model": "kilagraphdemo:block/drone_scoreboard", "y": 270 },
+        "facing=east":  { "model": "kilagraphdemo:block/drone_scoreboard", "y": 90 }
+    }
+}

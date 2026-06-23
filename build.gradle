@@ -40,6 +40,16 @@ repositories {
             includeGroup "maven.modrinth"
         }
     }
+    maven {
+        // location of the maven that hosts JEI files since January 2023
+        name = "Jared's maven"
+        url = "https://maven.blamejared.com/"
+    }
+    maven {
+        // location of a maven mirror for JEI files, as a fallback
+        name = "ModMaven"
+        url = "https://modmaven.dev"
+    }
 }
 
 base {
@@ -129,12 +139,13 @@ sourceSets.main.resources { srcDir 'src/generated/resources' }
 
 
 dependencies {
-    jarJar(implementation(group: "com.lowdragmc.ldlib2", name: "ldlib2-neoforge-${minecraft_version_vague}")) {
-        version {
-            // Version used in your workspace and bundled in mod jar
-            prefer "${ldlib2_version}"
-        }
-    }
+    implementation("com.lowdragmc.ldlib2:ldlib2-neoforge-${minecraft_version_vague}:${ldlib2_version}")
+//    jarJar(implementation(group: "com.lowdragmc.ldlib2", name: "ldlib2-neoforge-${minecraft_version_vague}")) {
+//        version {
+//            // Version used in your workspace and bundled in mod jar
+//            prefer "${ldlib2_version}"
+//        }
+//    }
 
 //    jarJar(implementation("com.lowdragmc.kilagraph:kilagraph-neoforge-${minecraft_version_vague}:${kilagraph_version}")) {
     jarJar(implementation(group: 'com.lowdragmc.kilagraph', name:"kilagraph-neoforge-${minecraft_version_vague}")) {
@@ -147,6 +158,11 @@ dependencies {
     // Iris
 //    localImplementation("maven.modrinth:sodium:${sodium_version}")
 //    localImplementation("maven.modrinth:iris:${iris_version}")
+
+    // JEI
+    compileOnly("mezz.jei:jei-${minecraft_version}-common-api:${jei_version}") { transitive = false }
+    compileOnly("mezz.jei:jei-${minecraft_version}-neoforge-api:${jei_version}") { transitive = false }
+    localImplementation("mezz.jei:jei-${minecraft_version}-neoforge:${jei_version}")
 
     localImplementation(files("./libs/SlideShow-NeoForge-26.1.2-0.10.3.jar"))
 

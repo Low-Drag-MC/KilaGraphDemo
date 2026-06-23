@@ -1,6 +1,12 @@
 package com.lowdragmc.kilagraphdemo.slideshow.mixin;
 
 import com.lowdragmc.kilagraphdemo.slideshow.client.SlideShowScreens;
+import com.lowdragmc.lowdraglib2.gui.texture.SpriteTexture;
+import com.lowdragmc.lowdraglib2.gui.ui.ModularUI;
+import com.lowdragmc.lowdraglib2.gui.ui.ModularUIClientAccess;
+import com.lowdragmc.lowdraglib2.gui.ui.UI;
+import com.lowdragmc.lowdraglib2.gui.ui.UIElement;
+import com.lowdragmc.lowdraglib2.gui.ui.event.UIEvents;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
@@ -36,11 +42,22 @@ public abstract class ProjectorScreenMixin extends AbstractContainerScreen<Proje
         var player = Minecraft.getInstance().player;
         if (player == null || !player.isCreative()) return;
         BlockPos pos = getMenu().tilePos;
-        Button button = Button.builder(Component.literal("Graph…"), b -> {
-            Level level = player.level();
-//            Minecraft.getInstance().setScreen(null); // close the container menu first
-            SlideShowScreens.openBrowse(level, pos);
-        }).bounds(this.leftPos + this.imageWidth + 4, this.topPos, 56, 20).build();
-        addRenderableWidget(button);
+//        Button button = Button.builder(Component.literal("KilaGraph"), b -> {
+//
+//        }).bounds(this.leftPos + this.imageWidth + 4, this.topPos, 56, 20).build();
+        var modular = new ModularUI(UI.of(new UIElement().layout(l -> l.width(this.imageWidth).height(this.imageHeight))
+                .addChild(new UIElement()
+                        .layout(l -> l.width(18).height(19)
+                                .left(this.imageWidth + 4)
+                                .top(4))
+                        .style(s -> s.background(SpriteTexture.of("kilagraphdemo:textures/gui/kg_button.png"))
+                                .tooltips("KilaGraph Shader"))
+                        .addEventListener(UIEvents.CLICK, e -> {
+                            Level level = player.level();
+                            SlideShowScreens.openBrowse(level, pos);
+                        })
+        )));
+        ModularUIClientAccess.setScreenAndInit(modular, this);
+        addRenderableWidget(ModularUIClientAccess.getWidget(modular));
     }
 }

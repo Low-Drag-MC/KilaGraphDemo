@@ -48,6 +48,10 @@ public final class KilagraphdemoClient {
                 com.lowdragmc.kilagraphdemo.client.drone.DroneStationRenderer::new);
         event.registerBlockEntityRenderer(ModRegistries.DRONE_RANKING_BE.get(),
                 com.lowdragmc.kilagraphdemo.client.drone.DroneStationRenderer::new);
+        event.registerBlockEntityRenderer(ModRegistries.DRONE_SCOREBOARD_BE.get(),
+                com.lowdragmc.kilagraphdemo.client.scoreboard.ScoreboardRenderer::new);
+        event.registerBlockEntityRenderer(ModRegistries.WORK_SCOREBOARD_BE.get(),
+                com.lowdragmc.kilagraphdemo.client.scoreboard.ScoreboardRenderer::new);
     }
 
     @SubscribeEvent

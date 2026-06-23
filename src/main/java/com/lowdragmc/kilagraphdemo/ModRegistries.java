@@ -2,9 +2,13 @@ package com.lowdragmc.kilagraphdemo;
 
 import com.lowdragmc.kilagraphdemo.block.DroneRankingBlock;
 import com.lowdragmc.kilagraphdemo.block.DroneRankingBlockEntity;
+import com.lowdragmc.kilagraphdemo.block.DroneScoreboardBlock;
+import com.lowdragmc.kilagraphdemo.block.DroneScoreboardBlockEntity;
 import com.lowdragmc.kilagraphdemo.block.DroneStationBlock;
 import com.lowdragmc.kilagraphdemo.block.DroneStationBlockEntity;
 import com.lowdragmc.kilagraphdemo.block.FertileSoilBlock;
+import com.lowdragmc.kilagraphdemo.block.WorkScoreboardBlock;
+import com.lowdragmc.kilagraphdemo.block.WorkScoreboardBlockEntity;
 import com.lowdragmc.kilagraphdemo.block.HologramBlock;
 import com.lowdragmc.kilagraphdemo.block.HologramBlockEntity;
 import com.lowdragmc.kilagraphdemo.block.ServerHologramBlock;
@@ -95,6 +99,32 @@ public final class ModRegistries {
             BLOCK_ENTITIES.register("drone_ranking",
                     () -> new BlockEntityType<>(DroneRankingBlockEntity::new, DRONE_RANKING_BLOCK.get()));
 
+    // Drone scoreboard: a billboard listing the drone leaderboard's top players (event-driven refresh).
+    public static final DeferredBlock<DroneScoreboardBlock> DRONE_SCOREBOARD_BLOCK = BLOCKS.registerBlock(
+            "drone_scoreboard",
+            DroneScoreboardBlock::new,
+            p -> p.noOcclusion().strength(2f));
+
+    public static final DeferredItem<?> DRONE_SCOREBOARD_ITEM =
+            ITEMS.registerSimpleBlockItem("drone_scoreboard", DRONE_SCOREBOARD_BLOCK);
+
+    public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<DroneScoreboardBlockEntity>> DRONE_SCOREBOARD_BE =
+            BLOCK_ENTITIES.register("drone_scoreboard",
+                    () -> new BlockEntityType<>(DroneScoreboardBlockEntity::new, DRONE_SCOREBOARD_BLOCK.get()));
+
+    // Work scoreboard: a billboard listing the most-liked shared hologram works (event-driven refresh).
+    public static final DeferredBlock<WorkScoreboardBlock> WORK_SCOREBOARD_BLOCK = BLOCKS.registerBlock(
+            "work_scoreboard",
+            WorkScoreboardBlock::new,
+            p -> p.noOcclusion().strength(2f));
+
+    public static final DeferredItem<?> WORK_SCOREBOARD_ITEM =
+            ITEMS.registerSimpleBlockItem("work_scoreboard", WORK_SCOREBOARD_BLOCK);
+
+    public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<WorkScoreboardBlockEntity>> WORK_SCOREBOARD_BE =
+            BLOCK_ENTITIES.register("work_scoreboard",
+                    () -> new BlockEntityType<>(WorkScoreboardBlockEntity::new, WORK_SCOREBOARD_BLOCK.get()));
+
     // Creative tab (reuses the existing "itemGroup.kilagraphdemo" lang key).
     public static final DeferredHolder<CreativeModeTab, CreativeModeTab> TAB = TABS.register("kilagraphdemo",
             () -> CreativeModeTab.builder()
@@ -106,6 +136,8 @@ public final class ModRegistries {
                         output.accept(FERTILE_SOIL_ITEM.get());
                         output.accept(DRONE_STATION_ITEM.get());
                         output.accept(DRONE_RANKING_ITEM.get());
+                        output.accept(DRONE_SCOREBOARD_ITEM.get());
+                        output.accept(WORK_SCOREBOARD_ITEM.get());
                     })
                     .build());
 
