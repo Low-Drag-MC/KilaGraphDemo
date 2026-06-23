@@ -56,6 +56,7 @@
   "kilagraphdemo.ui.common.unlike": "Unlike",
   "kilagraphdemo.ui.common.like.tooltip": "Like or remove your like from this shared work.",
   "kilagraphdemo.ui.common.exit.tooltip": "Exit (Esc)",
+  "kilagraphdemo.ui.common.screen_scale.tooltip": "GUI scale (applies while this editor is open)",
 
   "kilagraphdemo.ui.hologram.section_server": "Server",
   "kilagraphdemo.ui.hologram.section_local": "Local",

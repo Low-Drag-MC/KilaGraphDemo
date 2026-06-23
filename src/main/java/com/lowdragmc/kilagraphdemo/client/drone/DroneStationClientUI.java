@@ -151,7 +151,7 @@ public final class DroneStationClientUI {
         // Open with a placeholder; the stored program loads once it arrives over the sync channel.
         loadIntoEditor(newProgram());
 
-        leftPanel.addChild(controlBar());
+        leftPanel.addChild(controlBar(root));
 
         editorView.getLayout().widthPercent(100).flex(1);
         leftPanel.addChild(editorView);
@@ -280,9 +280,15 @@ public final class DroneStationClientUI {
         }
     }
 
-    private UIElement controlBar() {
+    private UIElement controlBar(UIElement root) {
         UIElement bar = new UIElement();
         bar.getLayout().widthPercent(100).flexDirection(FlexDirection.ROW).alignItems(AlignItems.CENTER).gapAll(2).paddingAll(2);
+
+        // Let the player change the MC GUI scale while editing; restored to its opening value on close
+        // (the saved preference is re-applied on next open). Shared with the hologram editor.
+        Button scaleBtn = com.lowdragmc.kilagraphdemo.client.editor.ScreenScaleControl.install(root).createButton();
+        scaleBtn.getLayout().height(12);
+        bar.addChild(scaleBtn);
 
         if (owner) {
             bar.addChild(button("kilagraphdemo.ui.drone_station.upload", "kilagraphdemo.ui.drone_station.upload.tooltip", this::upload));

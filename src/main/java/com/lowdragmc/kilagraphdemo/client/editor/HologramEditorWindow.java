@@ -140,6 +140,13 @@ public final class HologramEditorWindow {
         modelWin.getLeftTop().addView(modelView);
         worldWin.getLeftTop().addView(new WorldViewPanel());
 
+        // Let the player change the MC GUI scale while editing; restored to its opening value on close
+        // (the saved preference is re-applied on next open). Lives in the graph header's right section.
+        Button scaleBtn = ScreenScaleControl.install(root).createButton();
+        scaleBtn.getLayout().heightPercent(100);
+        editorView.graphView.header.select(".__node-graph-view_header-right__").findFirst()
+                .ifPresent(section -> section.addChild(scaleBtn));
+
         Handle handle = new Handle(root, editorView, model, editorView.serializeGraph(), initialModel);
         handleRef[0] = handle;
         return handle;
