@@ -72,13 +72,6 @@ import java.util.UUID;
  */
 public final class DroneStationClientUI {
 
-    /**
-     * The station whose menu is open on this client, or {@code null}. Read by {@link DroneStationRenderer}
-     * to draw the field's coordinate labels only for the station the player is currently programming.
-     */
-    @Nullable
-    public static volatile BlockPos openStation;
-
     private final BlockPos stationPos;
     private final boolean owner;
     private final DroneMenuSync.Bindings sync;
@@ -172,12 +165,12 @@ public final class DroneStationClientUI {
         // Fly the render camera over the station while the UI is open; restore it when the screen closes
         // (REMOVED fires via ModularUI.onRemoved from Screen.removed()). Also flag this station so the
         // renderer overlays its coordinate labels, and clear both on close.
-        openStation = stationPos;
+        OpenDroneBoard.pos = stationPos;
         activateCamera();
         installFlyControls(root);
         root.addEventListener(UIEvents.REMOVED, e -> {
             CameraOverrideManager.INSTANCE.deactivate();
-            if (stationPos.equals(openStation)) openStation = null;
+            if (stationPos.equals(OpenDroneBoard.pos)) OpenDroneBoard.pos = null;
         });
 
         // Intercept ESC (vanilla close is disabled via shouldCloseOnEsc(false)) so we can confirm before
@@ -289,7 +282,7 @@ public final class DroneStationClientUI {
 
     private UIElement controlBar() {
         UIElement bar = new UIElement();
-        bar.getLayout().widthPercent(100).height(14).flexDirection(FlexDirection.ROW).alignItems(AlignItems.CENTER).gapAll(2);
+        bar.getLayout().widthPercent(100).flexDirection(FlexDirection.ROW).alignItems(AlignItems.CENTER).gapAll(2).paddingAll(2);
 
         if (owner) {
             bar.addChild(button("Upload", this::upload));

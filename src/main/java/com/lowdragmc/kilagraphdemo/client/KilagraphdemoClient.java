@@ -46,6 +46,8 @@ public final class KilagraphdemoClient {
         event.registerBlockEntityRenderer(ModRegistries.SERVER_HOLOGRAM_BE.get(), ServerHologramRenderer::new);
         event.registerBlockEntityRenderer(ModRegistries.DRONE_STATION_BE.get(),
                 com.lowdragmc.kilagraphdemo.client.drone.DroneStationRenderer::new);
+        event.registerBlockEntityRenderer(ModRegistries.DRONE_RANKING_BE.get(),
+                com.lowdragmc.kilagraphdemo.client.drone.DroneStationRenderer::new);
     }
 
     @SubscribeEvent

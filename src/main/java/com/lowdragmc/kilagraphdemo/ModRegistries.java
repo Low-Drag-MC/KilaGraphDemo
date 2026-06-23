@@ -1,5 +1,7 @@
 package com.lowdragmc.kilagraphdemo;
 
+import com.lowdragmc.kilagraphdemo.block.DroneRankingBlock;
+import com.lowdragmc.kilagraphdemo.block.DroneRankingBlockEntity;
 import com.lowdragmc.kilagraphdemo.block.DroneStationBlock;
 import com.lowdragmc.kilagraphdemo.block.DroneStationBlockEntity;
 import com.lowdragmc.kilagraphdemo.block.FertileSoilBlock;
@@ -79,6 +81,20 @@ public final class ModRegistries {
             BLOCK_ENTITIES.register("drone_station",
                     () -> new BlockEntityType<>(DroneStationBlockEntity::new, DRONE_STATION_BLOCK.get()));
 
+    // Drone ranking display: read-only leaderboard viewer. Redstone signal strength selects which rank's
+    // solution to run + show (0 = rank 1). Anyone may open its spectator UI.
+    public static final DeferredBlock<DroneRankingBlock> DRONE_RANKING_BLOCK = BLOCKS.registerBlock(
+            "drone_ranking",
+            DroneRankingBlock::new,
+            p -> p.noOcclusion().strength(2f));
+
+    public static final DeferredItem<?> DRONE_RANKING_ITEM =
+            ITEMS.registerSimpleBlockItem("drone_ranking", DRONE_RANKING_BLOCK);
+
+    public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<DroneRankingBlockEntity>> DRONE_RANKING_BE =
+            BLOCK_ENTITIES.register("drone_ranking",
+                    () -> new BlockEntityType<>(DroneRankingBlockEntity::new, DRONE_RANKING_BLOCK.get()));
+
     // Creative tab (reuses the existing "itemGroup.kilagraphdemo" lang key).
     public static final DeferredHolder<CreativeModeTab, CreativeModeTab> TAB = TABS.register("kilagraphdemo",
             () -> CreativeModeTab.builder()
@@ -89,6 +105,7 @@ public final class ModRegistries {
                         output.accept(SERVER_HOLOGRAM_ITEM.get());
                         output.accept(FERTILE_SOIL_ITEM.get());
                         output.accept(DRONE_STATION_ITEM.get());
+                        output.accept(DRONE_RANKING_ITEM.get());
                     })
                     .build());
 

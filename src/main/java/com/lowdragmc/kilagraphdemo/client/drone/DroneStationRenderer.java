@@ -1,7 +1,7 @@
 package com.lowdragmc.kilagraphdemo.client.drone;
 
 import com.lowdragmc.kilagraphdemo.Kilagraphdemo;
-import com.lowdragmc.kilagraphdemo.block.DroneStationBlockEntity;
+import com.lowdragmc.kilagraphdemo.block.AbstractDroneBoardBlockEntity;
 import com.lowdragmc.kilagraphdemo.client.KilagraphdemoClient;
 import com.lowdragmc.kilagraphdemo.drone.DroneField;
 import com.lowdragmc.kilagraphdemo.drone.node.MoveNode;
@@ -44,7 +44,7 @@ import java.util.Map;
  * the drone is solid-coloured geometry ({@link RenderTypes#debugQuads()}). The station block sits at local
  * origin, soil top is local {@code y=0}, so pumpkins grow upward from {@code y=0}.</p>
  */
-public class DroneStationRenderer implements BlockEntityRenderer<DroneStationBlockEntity, DroneStationRenderState> {
+public class DroneStationRenderer implements BlockEntityRenderer<AbstractDroneBoardBlockEntity, DroneStationRenderState> {
 
     private static final Identifier PUMPKIN_SIDE =
             Identifier.fromNamespaceAndPath(Kilagraphdemo.MODID, "textures/block/pumpkin_side.png");
@@ -77,7 +77,7 @@ public class DroneStationRenderer implements BlockEntityRenderer<DroneStationBlo
     }
 
     @Override
-    public void extractRenderState(DroneStationBlockEntity be, DroneStationRenderState state, float partialTicks,
+    public void extractRenderState(AbstractDroneBoardBlockEntity be, DroneStationRenderState state, float partialTicks,
                                    Vec3 cameraPosition, ModelFeatureRenderer.@Nullable CrumblingOverlay breakProgress) {
         BlockEntityRenderState.extractBase(be, state, breakProgress);
         state.pos = be.getBlockPos();
@@ -91,7 +91,7 @@ public class DroneStationRenderer implements BlockEntityRenderer<DroneStationBlo
         // Visibility keys off the field geometry (a plain synced int), not the cells array: an array
         // shrinking back to empty on reset is not a reliable @DescSynced delta.
         state.active = be.getFieldWidth() > 0;
-        state.showCoords = be.getBlockPos().equals(DroneStationClientUI.openStation);
+        state.showCoords = be.getBlockPos().equals(OpenDroneBoard.pos);
         Level level = be.getLevel();
         state.time = level == null ? 0f : (level.getGameTime() + partialTicks);
     }
@@ -315,7 +315,7 @@ public class DroneStationRenderer implements BlockEntityRenderer<DroneStationBlo
     }
 
     @Override
-    public AABB getRenderBoundingBox(DroneStationBlockEntity be) {
+    public AABB getRenderBoundingBox(AbstractDroneBoardBlockEntity be) {
         // The field is fixed, so always cover it (+ a 1-cell margin for the edge coordinate labels and the
         // hovering drone) regardless of run state, so the board/labels are never culled while in view.
         BlockPos p = be.getBlockPos();
