@@ -146,7 +146,8 @@ class FarmSimulationTest {
     void mergedPumpkinRotsAfterFreshTicksAndScoresNothing() {
         FarmSimulation sim = ripeBlock(4, 4, 0, 0, 2, 2, new FarmConfig(5, 10, 4));
 
-        for (int i = 0; i < 10; i++) sim.tick(); // big pumpkin's own fresh window elapses
+        // A 2x2 big pumpkin stays fresh N=2x longer than a base one (freshTicks * n), so its window is 20.
+        for (int i = 0; i < 20; i++) sim.tick();
         assertEquals(Stage.ROTTEN, sim.getStage(0, 0), "big pumpkin rots");
         assertEquals(0, sim.harvest(0, 0), "rotten big pumpkin scores nothing");
     }
