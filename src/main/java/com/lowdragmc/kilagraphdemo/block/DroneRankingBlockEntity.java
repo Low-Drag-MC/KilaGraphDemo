@@ -20,13 +20,20 @@ import java.util.List;
  * leaderboard so nothing here is persisted.
  *
  * <p>Out-of-range handling (the spec's "越界问题要处理下，不崩溃就行"): a rank beyond the entry count, or an
- * empty / no-op program, simply idles with a blank board; an over-long run is restarted at
- * {@link #MAX_DEMO_TICKS} so {@code runTick} can never overflow.</p>
+ * empty / no-op program, simply idles with a blank board. A run loops only when the program actually
+ * finishes/halts (see {@link #finishRun()}); a program that never finishes is left running indefinitely and
+ * is only restarted as an overflow safety net at {@link #RUNTICK_OVERFLOW_GUARD}, far beyond any real run, so
+ * {@code runTick} can never wrap — there is no fixed time limit and no mid-run reset.</p>
  */
 public class DroneRankingBlockEntity extends AbstractDroneBoardBlockEntity {
 
-    /** Hard cap on a single run's length before it is looped, so {@code runTick} stays bounded. */
-    public static final int MAX_DEMO_TICKS = 20 * 60 * 5; // 5 minutes
+    /**
+     * Pure overflow safety net: only a program that never finishes/halts keeps incrementing {@code runTick}
+     * forever, and at this threshold (~3.4 years of continuous running) we loop it so the int can't wrap. It
+     * is never reached in normal viewing — the visible loop is "restart when the program finishes", not a
+     * fixed time cap.
+     */
+    public static final int RUNTICK_OVERFLOW_GUARD = Integer.MAX_VALUE - 1000;
 
     // --- server-only transient (streamed to menu-open players via DroneRankingMenuSync) ---------
     /** The leaderboard entry currently on display; instance identity changes when its score updates. */
@@ -90,10 +97,11 @@ public class DroneRankingBlockEntity extends AbstractDroneBoardBlockEntity {
             return;
         }
 
-        // Same selection: advance the looping run, bounding the tick counter so it can't overflow.
+        // Same selection: keep the run going. It loops on its own when the program finishes (finishRun); the
+        // only check here is the far-off overflow guard for a program that never finishes — no time limit.
         if (runState == RunState.RUNNING) {
             tickRun();
-            if (runTick > MAX_DEMO_TICKS) {
+            if (runTick > RUNTICK_OVERFLOW_GUARD) {
                 restart();
             }
         }

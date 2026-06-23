@@ -2,8 +2,6 @@ package com.lowdragmc.kilagraphdemo.block;
 
 import com.lowdragmc.kilagraphdemo.ModRegistries;
 import com.lowdragmc.kilagraphdemo.drone.DroneScoring;
-import com.lowdragmc.kilagraphdemo.drone.graph.DroneGraph;
-import com.lowdragmc.kilagraphdemo.drone.graph.DroneGraphCodec;
 import com.lowdragmc.kilagraphdemo.farm.RunState;
 import com.lowdragmc.kilagraphdemo.server.DroneLeaderboard;
 import com.lowdragmc.lowdraglib2.syncdata.annotation.DescSynced;
@@ -201,8 +199,8 @@ public class DroneStationBlockEntity extends AbstractDroneBoardBlockEntity {
             CompoundTag prog = getProgram().copy();
             String name = ownerName(sl, o);
             DroneLeaderboard.get(sl).submit(o, name, prog);
-            DroneGraph graph = DroneGraphCodec.fromTag(prog, sl.registryAccess());
-            DroneScoring.submitAsync(sl.getServer(), o, name, graph);
+            // The scorer deserializes a fresh graph per seed off-thread (registryAccess is an immutable snapshot).
+            DroneScoring.submitAsync(sl.getServer(), o, name, prog, sl.registryAccess());
         }
         runtime = null;
         sl.removeBlock(getBlockPos(), false); // silent: free the field for the next player, no item drop

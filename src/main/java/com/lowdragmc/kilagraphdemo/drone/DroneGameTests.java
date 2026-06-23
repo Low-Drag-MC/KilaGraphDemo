@@ -365,8 +365,8 @@ public final class DroneGameTests {
      * and one fly-in + plant->grow->harvest banks exactly 1 point.
      */
     private static void scoringStandard(GameTestHelper helper) {
-        int a = DroneScoring.scoreSync(buildMoveInGrowHarvest());
-        int b = DroneScoring.scoreSync(buildMoveInGrowHarvest());
+        int a = DroneScoring.scoreMedian(DroneGameTests::buildMoveInGrowHarvest);
+        int b = DroneScoring.scoreMedian(DroneGameTests::buildMoveInGrowHarvest);
         if (a != b) {
             helper.fail("non-deterministic standardized score: " + a + " != " + b);
             return;
