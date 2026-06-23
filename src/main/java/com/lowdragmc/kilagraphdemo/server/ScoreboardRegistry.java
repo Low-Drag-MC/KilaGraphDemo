@@ -52,6 +52,7 @@ public final class ScoreboardRegistry {
             snapshot = new ArrayList<>(set);
         }
         for (AbstractScoreboardBlockEntity be : snapshot) {
+            if (be.isRemoved()) continue;
             be.refreshFromSource();
         }
     }

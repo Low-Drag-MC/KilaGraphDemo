@@ -102,7 +102,7 @@ public class WorksSavedData extends SavedData {
         Path file = payloadFile(uid);
         if (!Files.exists(file)) return null;
         try {
-            return NbtIo.readCompressed(file, NbtAccounter.unlimitedHeap());
+            return NbtIo.readCompressed(file, NbtAccounter.create(Kilagraphdemo.MAX_DECOMPRESSED_BYTES));
         } catch (IOException e) {
             LOGGER.error("[KilaGraphDemo] failed to read payload {}", uid, e);
             return null;
@@ -221,7 +221,7 @@ public class WorksSavedData extends SavedData {
         Path file = dir.resolve("index.nbt");
         if (!Files.exists(file)) return;
         try {
-            CompoundTag root = NbtIo.readCompressed(file, NbtAccounter.unlimitedHeap());
+            CompoundTag root = NbtIo.readCompressed(file, NbtAccounter.create(Kilagraphdemo.MAX_DECOMPRESSED_BYTES));
             for (Tag t : root.getListOrEmpty("works")) {
                 if (t instanceof CompoundTag mt) {
                     WorkMeta meta = WorkMeta.fromTag(mt);

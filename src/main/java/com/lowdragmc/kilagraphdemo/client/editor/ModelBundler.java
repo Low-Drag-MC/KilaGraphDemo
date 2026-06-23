@@ -26,8 +26,8 @@ public final class ModelBundler {
 
     private static final Logger LOGGER = LogUtils.getLogger();
 
-    /** Max size of a bundled OBJ model per work (8 MiB), independent of the texture cap. */
-    public static final long MAX_MODEL_BYTES = 8L * 1024 * 1024;
+    /** Max size of a bundled OBJ model per work (2 MiB), independent of the texture cap. */
+    public static final long MAX_MODEL_BYTES = 2L * 1024 * 1024;
 
     private ModelBundler() {
     }

@@ -31,6 +31,9 @@ public class AuthorAvatarView extends UIElement {
     private final Scene scene;
     @Nullable
     private SkinnedMannequin avatar;
+    /** The author currently being displayed; async skin callbacks for any other author are discarded. */
+    @Nullable
+    private UUID pendingAuthor;
 
     public AuthorAvatarView() {
         getLayout().widthPercent(100).heightPercent(100).alignSelf(AlignItems.CENTER);
@@ -67,10 +70,12 @@ public class AuthorAvatarView extends UIElement {
             avatar.yHeadRotO = 180f - 70;
             scene.getDummyWorld().addEntity(avatar);
         }
+        pendingAuthor = uuid;
         avatar.setSkin(DefaultPlayerSkin.get(uuid));
         mc.getSkinManager().get(new GameProfile(uuid, name)).thenAccept(opt ->
                 mc.execute(() -> opt.ifPresent(skin -> {
-                    if (avatar != null) avatar.setSkin(skin);
+                    // Discard a late callback if a different author has since been selected (race guard).
+                    if (avatar != null && uuid.equals(pendingAuthor)) avatar.setSkin(skin);
                 })));
     }
 

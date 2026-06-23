@@ -38,8 +38,8 @@ public final class TextureBundler {
 
     private static final Logger LOGGER = LogUtils.getLogger();
 
-    /** Max combined size of bundled PNG bytes per work (8 MiB). */
-    public static final long MAX_TOTAL_BYTES = 8L * 1024 * 1024;
+    /** Max combined size of bundled PNG bytes per work (4 MiB). */
+    public static final long MAX_TOTAL_BYTES = 4L * 1024 * 1024;
 
     private TextureBundler() {
     }

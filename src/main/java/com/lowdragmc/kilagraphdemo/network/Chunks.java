@@ -39,7 +39,9 @@ public final class Chunks {
     }
 
     public static CompoundTag toTag(byte[] data) throws IOException {
-        return NbtIo.readCompressed(new ByteArrayInputStream(data), NbtAccounter.unlimitedHeap());
+        // Bound decompression so a malicious client can't inflate a small payload into an OOM.
+        return NbtIo.readCompressed(new ByteArrayInputStream(data),
+                NbtAccounter.create(com.lowdragmc.kilagraphdemo.Kilagraphdemo.MAX_DECOMPRESSED_BYTES));
     }
 
     public static List<byte[]> split(byte[] data) {

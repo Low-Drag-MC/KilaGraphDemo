@@ -18,6 +18,16 @@ public class Kilagraphdemo {
     public static final String MODID = "kilagraphdemo";
     /** Max works a normal player may publish to a server (see {@link #canBypassUploadLimit}). Static knob. */
     public static int MAX_WORKS_PER_PLAYER = 1;
+    /** Server-side cap on an upload's assembled (compressed) payload bytes. Client caps are advisory. */
+    public static int MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
+    /** Ceiling for NBT decompression (guards against decompression bombs from a malicious client). */
+    public static int MAX_DECOMPRESSED_BYTES = 32 * 1024 * 1024;
+    /** Minimum gap between a player's completed uploads (publishes and updates both count). */
+    public static long UPLOAD_COOLDOWN_MS = 10_000L;
+    /** Max simultaneous in-flight transfers a single player may have buffered server-side. */
+    public static int MAX_CONCURRENT_TRANSFERS = 2;
+    /** A partial transfer with no activity for this long is swept (abandoned/disconnected upload). */
+    public static long TRANSFER_TIMEOUT_MS = 30_000L;
     private static final Logger LOGGER = LogUtils.getLogger();
     private static File ASSETS_PATH;
 
