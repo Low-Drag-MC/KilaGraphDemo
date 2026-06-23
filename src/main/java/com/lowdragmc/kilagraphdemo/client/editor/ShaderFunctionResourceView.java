@@ -5,7 +5,9 @@ import com.lowdragmc.kilagraph.rendertype.ShaderFunctionGraph;
 import com.lowdragmc.lowdraglib2.Platform;
 import com.lowdragmc.lowdraglib2.editor.resource.IResourcePath;
 import com.lowdragmc.lowdraglib2.editor.ui.View;
+import com.lowdragmc.lowdraglib2.gui.ui.UIElement;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Button;
+import com.lowdragmc.lowdraglib2.gui.ui.elements.Dialog;
 import com.lowdragmc.lowdraglib2.nodegraphtookit.editor.GraphEditorView;
 import com.lowdragmc.lowdraglib2.nodegraphtookit.editor.GraphResourceProviderContainer;
 import dev.vfyjxf.taffy.style.FlexDirection;
@@ -39,9 +41,31 @@ public class ShaderFunctionResourceView extends View {
         container.getLayout().flex(1).widthPercent(100);
         container.reloadResourceContainer();
 
-        addChild(new Button().setText("kilagraphdemo.ui.editor.new_shader").setOnClick(e -> container.addNewDefault())
+        var actions = new UIElement();
+        actions.getLayout().flexDirection(FlexDirection.ROW).widthPercent(100).gapAll(2);
+        actions.addChild(new Button().setText("kilagraphdemo.ui.editor.new_shader").setOnClick(e -> container.addNewDefault())
                 .style(s -> s.appendTooltipsString("kilagraphdemo.ui.editor.new_shader.tooltip")));
+        actions.addChild(new Button().setText("kilagraphdemo.ui.editor.rename_shader").setOnClick(e -> container.beginRename())
+                .style(s -> s.appendTooltipsString("kilagraphdemo.ui.editor.rename_shader.tooltip")));
+        actions.addChild(new Button().setText("kilagraphdemo.ui.editor.delete_shader").setOnClick(e -> confirmDelete())
+                .style(s -> s.appendTooltipsString("kilagraphdemo.ui.editor.delete_shader.tooltip")));
+        addChild(actions);
         addChild(container);
+    }
+
+    /** Prompt before deleting the selected Shader-Function (an accidental click shouldn't nuke a file). */
+    private void confirmDelete() {
+        if (container.getSelected() == null) return;
+        Dialog.showCheckBox("kilagraphdemo.ui.editor.delete_shader",
+                "kilagraphdemo.ui.editor.delete_shader.confirm", result -> {
+                    if (result) container.deleteSelected();
+                }).show(this);
+    }
+
+    /** Seed a new Shader-Function resource from an exported selection's tag (from the graph editor's
+     *  "Export as Shader Function" action) and select it. */
+    public void addExported(CompoundTag tag) {
+        container.addExported(tag);
     }
 
     /** Resolve an external Shader-Function reference against the local store (for the editor's resolver). */
@@ -87,6 +111,50 @@ public class ShaderFunctionResourceView extends View {
             resourceProvider.addResource(key, output.buildResult());
             appendResourceUI(key);
             selectResource(key);
+        }
+
+        /** Seed a new resource from an already-serialized Shader-Function {@code tag} (an exported selection),
+         *  auto-named and selected — mirrors {@link #addNewDefault} but skips creating an empty graph. */
+        void addExported(CompoundTag tag) {
+            if (tag == null) return;
+            var key = resourceProvider.createSubPath("shader_function");
+            int n = 1;
+            while (resourceProvider.hasResource(key)) {
+                key = resourceProvider.createSubPath("shader_function_" + n++);
+            }
+            resourceProvider.addResource(key, tag);
+            appendResourceUI(key);
+            selectResource(key);
+        }
+
+        /** Delete the selected resource, bypassing the base remove path (which needs an Editor's history).
+         *  The {@code FileResourceProvider} deletes the backing file; the list is rebuilt from the provider. */
+        void deleteSelected() {
+            var key = getSelected();
+            if (key == null || !resourceProvider.hasResource(key)) return;
+            resourceProvider.removeResource(key);
+            selected = null;
+            reloadResourceContainer();
+        }
+
+        /** Begin inline renaming of the selected resource (the base sets up the text field + uniqueness;
+         *  {@link #onRename} commits the rename without an Editor's history). */
+        void beginRename() {
+            var key = getSelected();
+            if (key != null) renameResource(key);
+        }
+
+        /** Commit a rename on the {@code FileResourceProvider} directly (the base path needs an Editor's
+         *  history): move the resource to the new path and rebuild the list. */
+        @Override
+        protected void onRename(IResourcePath oldPath, IResourcePath newPath) {
+            var value = resourceProvider.getResource(oldPath);
+            if (value == null) return;
+            resourceProvider.addResource(newPath, value);
+            resourceProvider.removeResource(oldPath);
+            selected = null;
+            reloadResourceContainer();
+            selectResource(newPath);
         }
     }
 }

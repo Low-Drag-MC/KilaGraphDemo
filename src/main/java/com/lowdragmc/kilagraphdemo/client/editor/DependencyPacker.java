@@ -3,7 +3,7 @@ package com.lowdragmc.kilagraphdemo.client.editor;
 import com.lowdragmc.kilagraph.rendertype.ShaderFunctionGraph;
 import com.lowdragmc.lowdraglib2.editor.resource.IResourcePath;
 import com.lowdragmc.lowdraglib2.nodegraphtookit.api.graph.Graph;
-import com.lowdragmc.lowdraglib2.nodegraphtookit.api.node.INode;
+import com.lowdragmc.lowdraglib2.nodegraphtookit.model.node.AbstractNodeModel;
 import com.lowdragmc.lowdraglib2.nodegraphtookit.model.node.SubgraphNodeModel;
 import net.minecraft.nbt.CompoundTag;
 
@@ -28,7 +28,10 @@ public final class DependencyPacker {
     }
 
     private static void collectFrom(Graph graph, LocalShaderFunctions store, Map<String, CompoundTag> out) {
-        for (INode node : graph.getNodes()) {
+        // Iterate the node *models* (graphModel.getNodeModels()), not graph.getNodes(): a
+        // SubgraphNodeModel is neither an INode nor an ICustomNodeModel, so it is omitted from the
+        // INode view returned by getNodes() — walking that view would never see external subgraphs.
+        for (AbstractNodeModel node : graph.graphModel.getNodeModels()) {
             if (!(node instanceof SubgraphNodeModel sub) || sub.getKind() != SubgraphNodeModel.Kind.EXTERNAL) {
                 continue;
             }

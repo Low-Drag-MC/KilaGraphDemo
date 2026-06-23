@@ -9,6 +9,8 @@ import com.lowdragmc.kilagraphdemo.client.editor.LocalShaderFunctions;
 import com.lowdragmc.kilagraphdemo.client.editor.ModelBundler;
 import com.lowdragmc.kilagraphdemo.client.editor.PlacementDialog;
 import com.lowdragmc.kilagraphdemo.client.editor.TextureBundler;
+import com.lowdragmc.kilagraphdemo.client.editor.WorkValidator;
+import com.lowdragmc.lowdraglib2.editor.resource.IResourcePath;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Dialog;
 import com.lowdragmc.kilagraphdemo.client.render.HologramDisplay;
 import com.lowdragmc.kilagraphdemo.client.render.HologramDisplays;
@@ -582,6 +584,24 @@ public class HologramBrowseUI implements ClientWorks.Listener {
                 return;
             }
             if (modelResult.pkg() != null) uploadPkg = modelResult.pkg();
+            // Gate the upload: a shared work must be self-contained (all referenced shader functions
+            // bundled) and must compile, or downloaders would get a broken render. (Local saves aren't gated.)
+            WorkValidator.Result validation = WorkValidator.validate(uploadPkg);
+            if (!validation.ok()) {
+                if (!validation.missingRefs().isEmpty()) {
+                    String names = String.join(", ", validation.missingRefs().stream()
+                            .map(s -> {
+                                IResourcePath p = IResourcePath.parse(s);
+                                return p != null ? p.getResourceName() : s;
+                            }).toList());
+                    Dialog.showNotification("kilagraphdemo.ui.hologram.dlg.missing_refs.title",
+                            I18n.get("kilagraphdemo.ui.hologram.dlg.missing_refs.body", names), null).show(root);
+                } else {
+                    Dialog.showNotification("kilagraphdemo.ui.hologram.dlg.compile_failed.title",
+                            "kilagraphdemo.ui.hologram.dlg.compile_failed.body", null).show(root);
+                }
+                return;
+            }
             Dialog.showNotification("kilagraphdemo.ui.hologram.dlg.uploaded.title",
                     I18n.get("kilagraphdemo.ui.hologram.dlg.uploaded.body",
                             uploadPkg.textures().size(), uploadPkg.models().size(),

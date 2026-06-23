@@ -2,7 +2,6 @@ package com.lowdragmc.kilagraphdemo.client.editor;
 
 import com.lowdragmc.kilagraph.rendertype.RenderTypeGraph;
 import com.lowdragmc.kilagraph.rendertype.gui.RenderTypeGraphEditorView;
-import com.lowdragmc.kilagraph.rendertype.gui.RenderTypeGraphView;
 import com.lowdragmc.kilagraphdemo.client.render.HologramDisplay;
 import com.lowdragmc.kilagraphdemo.client.ui.WorldViewPanel;
 import com.lowdragmc.kilagraphdemo.graph.ModelSelection;
@@ -120,7 +119,10 @@ public final class HologramEditorWindow {
         RenderTypeGraph graph = display.graph();
         graph.graphModel.setReferenceResolver(store::resolve);
 
-        RenderTypeGraphEditorView editorView = new RenderTypeGraphEditorView(RenderTypeGraphView::new);
+        // The graph view's "Export as Shader Function" routes into the local Shader-Function store (the demo
+        // has no LDLib2 Editor for the base action to target). The same factory builds subgraph-dive views.
+        RenderTypeGraphEditorView editorView = new RenderTypeGraphEditorView(
+                () -> new DemoRenderTypeGraphView(resourceView::addExported));
         editorView.loadGraph(graph, tag -> {
             onSaved.onSave(tag, model[0], DependencyPacker.collect(graph, store));
             if (handleRef[0] != null) handleRef[0].recordSaved(tag);
