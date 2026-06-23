@@ -1,3 +1,6 @@
 {
-	"parent": "kilagraphdemo:block/drone_station"
+	"parent": "kilagraphdemo:block/hologram",
+	"textures": {
+		"top": "kilagraphdemo:block/hologram2_top"
+	}
 }
