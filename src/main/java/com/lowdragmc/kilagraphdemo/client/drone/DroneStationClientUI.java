@@ -33,11 +33,13 @@ import com.lowdragmc.lowdraglib2.gui.ui.elements.SplitView;
 import com.lowdragmc.lowdraglib2.gui.ui.event.UIEvents;
 import com.lowdragmc.lowdraglib2.gui.ui.style.StylesheetManager;
 import com.lowdragmc.lowdraglib2.nodegraphtookit.api.graph.Graph;
+import com.lowdragmc.lowdraglib2.nodegraphtookit.api.type.TypeHandles;
 import com.lowdragmc.lowdraglib2.nodegraphtookit.editor.GraphEditorView;
 import com.lowdragmc.lowdraglib2.nodegraphtookit.gui.DockSlot;
 import com.lowdragmc.lowdraglib2.nodegraphtookit.gui.GraphPanel;
 import com.lowdragmc.lowdraglib2.nodegraphtookit.gui.node.NodeElement;
 import com.lowdragmc.lowdraglib2.nodegraphtookit.model.graph.CustomGraphModelImpl;
+import com.lowdragmc.lowdraglib2.nodegraphtookit.model.node.ConstantNodeModel;
 import com.lowdragmc.lowdraglib2.nodegraphtookit.model.node.NodeModel;
 import com.mojang.blaze3d.platform.InputConstants;
 import dev.vfyjxf.taffy.style.AlignItems;
@@ -491,7 +493,8 @@ public final class DroneStationClientUI {
      * Build the default starter program: a nested {@code For x (0..8) { For z (0..8) { … } }} sweep that
      * visits every cell of the fixed 9×9 field by {@link MoveToCoordNode absolute coordinate}, scans the
      * cell, and tends it — plant if plantable, else harvest if ripe, else clear if rotten — logging the
-     * cell's merge size each step. A complete, working example a player can tweak.
+     * cell's merge size each step. When the sweep completes it prints "done" and loops back into the outer
+     * For, so it runs continuously. A complete, working example a player can tweak.
      *
      * <p>(Reconstruction of the user-authored graph: the cosmetic wire portals "pos x"/"pos z"/"- next"
      * are flattened into direct wires here — behaviourally identical.)</p>
@@ -512,6 +515,12 @@ public final class DroneStationClientUI {
         NodeModel plant = gm.createNodeModel(new PlantNode(), new Vector2f(720, -64));
         NodeModel harvest = gm.createNodeModel(new HarvestNode(), new Vector2f(720, 120));
         NodeModel clear = gm.createNodeModel(new ClearNode(), new Vector2f(720, 300));
+        // After a full sweep, print "done" and loop back into For x so it runs forever. The "done" literal
+        // comes from the toolkit's built-in constant node — DronePrintNode's "value" is an UNKNOWN port and
+        // so carries no editable constant of its own, so the text is supplied through a wire.
+        NodeModel donePrint = gm.createNodeModel(new DronePrintNode(), new Vector2f(-120, 140));
+        ConstantNodeModel doneLabel = (ConstantNodeModel) gm.createConstantNode(
+                "done", new Vector2f(-360, 140), TypeHandles.STRING, "done").getNodeModel();
 
         setConstant(forX, "count", DroneField.SIZE);
         setConstant(forZ, "count", DroneField.SIZE);
@@ -528,6 +537,13 @@ public final class DroneStationClientUI {
         wireExec(gm, bRipe, "trueExec", harvest, "trigger");
         wireExec(gm, bRipe, "falseExec", bRotten, "in");
         wireExec(gm, bRotten, "trueExec", clear, "trigger");
+        // after harvesting or clearing a cell, plant it again right away (plant's exec input accepts fan-in)
+        wireExec(gm, harvest, "next", plant, "trigger");
+        wireExec(gm, clear, "next", plant, "trigger");
+        // loop: For x completed → print "done" → back into For x's "in" (an exec input accepts fan-in, so
+        // this runs alongside the initial Entry trigger) → the whole field sweep repeats forever.
+        wireExec(gm, forX, "completed", donePrint, "trigger");
+        wireExec(gm, donePrint, "next", forX, "in");
 
         // data: target cell = (forX.index, forZ.index); scan that cell (relative dx=dz=0 after the move)
         wireData(gm, forX, "index", move, "x");
@@ -536,6 +552,7 @@ public final class DroneStationClientUI {
         wireData(gm, scan, "ripe", bRipe, "cond");
         wireData(gm, scan, "rotten", bRotten, "cond");
         wireData(gm, scan, "mergeSize", print, "value");
+        gm.createWire(donePrint.getInputsById().get("value"), doneLabel.getOutputPort());
         return graph;
     }
 
