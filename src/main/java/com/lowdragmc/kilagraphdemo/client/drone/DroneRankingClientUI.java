@@ -4,6 +4,7 @@ import com.lowdragmc.kilagraphdemo.block.DroneRankingBlockEntity;
 import com.lowdragmc.kilagraphdemo.drone.DroneRankingMenuSync;
 import com.lowdragmc.kilagraphdemo.drone.graph.DroneGraph;
 import com.lowdragmc.kilagraphdemo.drone.graph.DroneGraphCodec;
+import com.lowdragmc.kilagraphdemo.client.ui.InventoryKeyGuard;
 import com.lowdragmc.kilagraphdemo.farm.RunState;
 import com.lowdragmc.lowdraglib2.gui.ColorPattern;
 import com.lowdragmc.lowdraglib2.gui.factory.BlockUIMenuType;
@@ -88,6 +89,7 @@ public final class DroneRankingClientUI {
     public static ModularUI build(BlockUIMenuType.BlockUIHolder holder, @Nullable DroneRankingBlockEntity be) {
         UIElement root = new UIElement();
         ModularUI ui = new ModularUI(UI.of(root, StylesheetManager.ORE_MERGED), holder.player);
+        ui.shouldCloseOnKeyInventory(false);
         DroneRankingMenuSync.Bindings sync = DroneRankingMenuSync.register(ui, true, be);
         new DroneRankingClientUI(holder.pos, sync).buildInto(root);
         return ui;
@@ -123,6 +125,8 @@ public final class DroneRankingClientUI {
         OpenDroneBoard.pos = blockPos;
         activateCamera();
         installFlyControls(root);
+        // shouldCloseOnKeyInventory(false) alone doesn't stop the inventory key closing this container menu.
+        InventoryKeyGuard.install(root);
         root.addEventListener(UIEvents.REMOVED, e -> {
             CameraOverrideManager.INSTANCE.deactivate();
             if (blockPos.equals(OpenDroneBoard.pos)) OpenDroneBoard.pos = null;

@@ -4,6 +4,7 @@ import com.lowdragmc.kilagraph.blueprint.nodes.exec.BranchNode;
 import com.lowdragmc.kilagraph.blueprint.nodes.exec.EntryNode;
 import com.lowdragmc.kilagraph.blueprint.nodes.exec.ForNode;
 import com.lowdragmc.kilagraphdemo.block.DroneStationBlockEntity;
+import com.lowdragmc.kilagraphdemo.client.ui.InventoryKeyGuard;
 import com.lowdragmc.kilagraphdemo.drone.DroneField;
 import com.lowdragmc.kilagraphdemo.drone.DroneMenuSync;
 import com.lowdragmc.kilagraphdemo.drone.graph.DroneGraph;
@@ -125,6 +126,7 @@ public final class DroneStationClientUI {
         ModularUI ui = new ModularUI(UI.of(root, StylesheetManager.ORE_MERGED), holder.player);
         // We handle ESC ourselves so we can confirm before discarding unsaved graph edits.
         ui.shouldCloseOnEsc(false);
+        ui.shouldCloseOnKeyInventory(false);
         DroneMenuSync.Bindings sync = DroneMenuSync.register(ui, true, be);
 
         new DroneStationClientUI(holder.pos, owner, sync).buildInto(root);
@@ -168,6 +170,8 @@ public final class DroneStationClientUI {
         OpenDroneBoard.pos = stationPos;
         activateCamera();
         installFlyControls(root);
+        // shouldCloseOnKeyInventory(false) alone doesn't stop the inventory key closing this container menu.
+        InventoryKeyGuard.install(root);
         root.addEventListener(UIEvents.REMOVED, e -> {
             CameraOverrideManager.INSTANCE.deactivate();
             if (stationPos.equals(OpenDroneBoard.pos)) OpenDroneBoard.pos = null;

@@ -30,15 +30,19 @@ public class ServerHologramBlock extends HologramBlock {
     @Override
     protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player,
                                                BlockHitResult hitResult) {
-        // Server holograms are op/creative-only — both opening and editing the browser. Regular holograms
-        // (the superclass) stay free for everyone.
-        if (!com.lowdragmc.kilagraphdemo.Kilagraphdemo.canBypassUploadLimit(player)) {
-            return InteractionResult.PASS;
+        boolean privileged = com.lowdragmc.kilagraphdemo.Kilagraphdemo.canBypassUploadLimit(player);
+        // Op/creative + sneak → the privileged "set display" browser. Client-only classes are referenced
+        // only inside the isClientSide guard, so a dedicated server never classloads them.
+        if (privileged && player.isSecondaryUseActive()) {
+            if (level.isClientSide()) {
+                com.lowdragmc.kilagraphdemo.client.editor.HologramScreens.openServerBrowse(level, pos);
+            }
+            return InteractionResult.SUCCESS;
         }
-        // Open the client-only server browser. The client class is referenced only inside this guard, so a
-        // dedicated server never classloads it.
+        // Everyone else (and ops without sneak) → the read-only shadergraph viewer. It sends no packets,
+        // and the mutating C2S packets re-check permissions server-side, so non-ops can't change anything.
         if (level.isClientSide()) {
-            com.lowdragmc.kilagraphdemo.client.editor.HologramScreens.openServerBrowse(level, pos);
+            com.lowdragmc.kilagraphdemo.client.editor.HologramScreens.openServerView(level, pos);
         }
         return InteractionResult.SUCCESS;
     }

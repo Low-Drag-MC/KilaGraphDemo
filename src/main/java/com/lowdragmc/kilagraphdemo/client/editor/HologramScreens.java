@@ -37,6 +37,13 @@ public final class HologramScreens {
         setScreen(ui.getRoot());
     }
 
+    /** Open the read-only shadergraph viewer for the server hologram at {@code pos} (any player). */
+    public static void openServerView(Level level, BlockPos pos) {
+        var be = level.getBlockEntity(pos) instanceof com.lowdragmc.kilagraphdemo.block.ServerHologramBlockEntity h ? h : null;
+        var uid = be == null ? "" : be.getDisplayedWorkUid();
+        setScreen(ServerHologramViewerWindow.build(uid));
+    }
+
     /** Open the editor on {@code display}; {@code onSaved} receives the graph tag, model + deps on save. */
     public static void openEditor(GlobalPos blockPos, HologramDisplay display, ModelSelection model,
                                   HologramEditorWindow.SaveCallback onSaved) {
