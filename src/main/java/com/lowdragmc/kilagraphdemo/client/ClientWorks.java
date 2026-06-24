@@ -5,6 +5,7 @@ import com.lowdragmc.kilagraphdemo.client.editor.LocalShaderFunctions;
 import com.lowdragmc.kilagraphdemo.client.render.ServerHologramDisplays;
 import com.lowdragmc.kilagraphdemo.graph.LocalGraphStore;
 import com.lowdragmc.kilagraphdemo.graph.ServerWorkEntry;
+import com.lowdragmc.kilagraphdemo.graph.WorkMeta;
 import com.lowdragmc.kilagraphdemo.graph.WorkPackage;
 import com.lowdragmc.lowdraglib2.editor.resource.IResourcePath;
 import com.lowdragmc.kilagraphdemo.network.C2SDelete;
@@ -24,8 +25,11 @@ import org.slf4j.Logger;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -115,10 +119,64 @@ public final class ClientWorks {
 
     public static void onListReceived(List<ServerWorkEntry> entries) {
         serverWorks = entries;
+        runOnClient(() -> {
+            reconcileAndInvalidate(entries);
+            notifyUpdated(null);
+        });
+    }
+
+    /**
+     * Apply an authoritative server snapshot. The list is complete, so we treat it as the source of truth
+     * (rather than a monotonic {@code max}, which can't represent a delete + re-publish that restarts at
+     * version 1). Three steps, on the client thread:
+     * <ol>
+     *   <li>Reconcile our <em>own</em> published works: when a local copy lags the authoritative version,
+     *       bump only its meta (its content is already what we uploaded) so the stale-check
+     *       ({@code serverVersion > localVersion}) stops re-pulling our own current content.</li>
+     *   <li>Refresh {@link #SERVER_VERSIONS} from the snapshot, dropping uids no longer present.</li>
+     *   <li>Invalidate the placed-block display caches for every uid whose version <em>changed</em> (up or
+     *       down) or vanished — this is what makes the uploader (excluded from the {@code work_updated}
+     *       broadcast) and any re-publish actually re-pull/rebuild.</li>
+     * </ol>
+     */
+    private static void reconcileAndInvalidate(List<ServerWorkEntry> entries) {
+        Map<String, Integer> latest = new HashMap<>();
         for (ServerWorkEntry e : entries) {
-            SERVER_VERSIONS.merge(e.meta().uid(), e.meta().version(), Math::max);
+            latest.put(e.meta().uid(), e.meta().version());
         }
-        runOnClient(() -> notifyUpdated(null));
+
+        var player = Minecraft.getInstance().player;
+        String myUuid = player == null ? null : player.getUUID().toString();
+        if (myUuid != null) {
+            for (ServerWorkEntry e : entries) {
+                WorkMeta authoritative = e.meta();
+                if (!authoritative.authorUuid().equals(myUuid)) continue;
+                LocalGraphStore.load(authoritative.uid()).ifPresent(pkg -> {
+                    WorkMeta local = pkg.meta();
+                    boolean mine = local.authorUuid().isEmpty() || local.authorUuid().equals(myUuid);
+                    if (mine && local.version() < authoritative.version()) {
+                        // LocalGraphStore.save also invalidates the display caches for this uid.
+                        LocalGraphStore.save(pkg.withMeta(authoritative));
+                    }
+                });
+            }
+        }
+
+        Set<String> changed = new HashSet<>();
+        for (Map.Entry<String, Integer> e : SERVER_VERSIONS.entrySet()) {
+            Integer now = latest.get(e.getKey());
+            if (now == null || !now.equals(e.getValue())) changed.add(e.getKey());
+        }
+        for (Map.Entry<String, Integer> e : latest.entrySet()) {
+            Integer old = SERVER_VERSIONS.get(e.getKey());
+            if (old == null || !old.equals(e.getValue())) changed.add(e.getKey());
+        }
+        SERVER_VERSIONS.keySet().retainAll(latest.keySet());
+        SERVER_VERSIONS.putAll(latest);
+        for (String uid : changed) {
+            ServerHologramDisplays.onWorkSaved(uid);
+            com.lowdragmc.kilagraphdemo.slideshow.client.ClientProjectorGraphs.onWorkSaved(uid);
+        }
     }
 
     /**

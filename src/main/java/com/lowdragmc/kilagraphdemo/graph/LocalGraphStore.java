@@ -1,6 +1,8 @@
 package com.lowdragmc.kilagraphdemo.graph;
 
 import com.lowdragmc.kilagraphdemo.Kilagraphdemo;
+import com.lowdragmc.kilagraphdemo.client.render.ServerHologramDisplays;
+import com.lowdragmc.kilagraphdemo.slideshow.client.ClientProjectorGraphs;
 import com.mojang.logging.LogUtils;
 import net.minecraft.client.Minecraft;
 import net.minecraft.nbt.NbtAccounter;
@@ -48,6 +50,12 @@ public final class LocalGraphStore {
         } catch (IOException e) {
             LOGGER.error("[KilaGraphDemo] failed to save work {}", pkg.meta().uid(), e);
         }
+        // A local (re)write may have changed the work's content (authoring edit, meta save, upload, or a
+        // completed download). Drop any compiled/built display cached for this uid so the next render
+        // rebuilds from the new payload. Without this an author's own placed projector/hologram stays
+        // frozen at the first version — they never receive the work_updated broadcast for their own upload.
+        ClientProjectorGraphs.onWorkSaved(pkg.meta());
+        ServerHologramDisplays.onWorkSaved(pkg.meta().uid());
     }
 
     public static Optional<WorkPackage> load(String uid) {
